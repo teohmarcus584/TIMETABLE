@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Staff Shift Planner + Google Sheets Sync</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, 'Segoe UI', 'Inter', -apple-system, sans-serif;
+        }
+
+        body {
+            background: #ecf3f9;
+            margin: 0;
+            padding: 20px 16px;
+            color: #0c2a3b;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 32px;
+            padding: 20px 28px;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            border: 1px solid #dee6ef;
+        }
+
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 700;
+            margin: 0 0 8px;
+            background: linear-gradient(135deg, #1c4e70, #2f6b9b);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .sub {
+            color: #2c6e9e;
+            border-left: 4px solid #3b82f6;
+            padding-left: 16px;
+            margin: 5px 0 18px;
+            font-weight: 500;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 12px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        button {
+            background: white;
+            border: 1px solid #cbdde9;
+            padding: 8px 18px;
+            border-radius: 60px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #1e3a5f;
+        }
+
+        button.primary {
+            background: #1f6392;
+            border-color: #1f6392;
+            color: white;
+        }
+
+        button.primary:hover {
+            background: #0e4e75;
+            transform: translateY(-1px);
+        }
+
+        button.google-sync {
+            background: #0f9d58;
+            border-color: #0f9d58;
+            color: white;
+        }
+
+        button.google-sync:hover {
+            background: #0c7a45;
+        }
+
+        button.danger {
+            background: #fff4f0;
+            border-color: #fbc4ab;
+            color: #b13e1a;
+        }
+
+        button.danger:hover {
+            background: #ffe6dd;
+        }
+
+        button:hover {
+            background: #eaf1f9;
+        }
+
+        .staff-panel {
+            background: #fffaf0;
+            border: 1px solid #f5e2b0;
+            border-radius: 28px;
+            padding: 16px 24px;
+            margin-bottom: 32px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .staff-input-group {
+            flex: 2;
+            min-width: 260px;
+        }
+
+        .staff-input-group label {
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #7a5a1a;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .staff-input-group input {
+            width: 100%;
+            padding: 10px 16px;
+            border-radius: 60px;
+            border: 1px solid #ecd896;
+            background: white;
+            font-size: 0.9rem;
+        }
+
+        .outlet-card {
+            background: white;
+            border-radius: 32px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+            margin-bottom: 40px;
+            overflow-x: auto;
+            border: 1px solid #e2ebf3;
+        }
+
+        .outlet-title {
+            background: #fafdff;
+            padding: 18px 24px;
+            border-bottom: 2px solid #eef2fa;
+        }
+
+        .outlet-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .hours-badge {
+            background: #e5f0ff;
+            color: #1f6392;
+            font-size: 0.75rem;
+            padding: 4px 14px;
+            border-radius: 50px;
+            font-weight: 500;
+        }
+
+        .shift-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 700px;
+        }
+
+        .shift-table th {
+            background: #f4f9fe;
+            padding: 14px 10px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: #1f4b6e;
+            border-bottom: 1px solid #dfe8f0;
+            text-align: center;
+        }
+
+        .shift-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ecf3f8;
+            vertical-align: middle;
+            text-align: center;
+        }
+
+        .staff-name-cell {
+            font-weight: 600;
+            background-color: #fefbf5;
+            text-align: left;
+            padding-left: 16px;
+            font-size: 0.9rem;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px 6px;
+            border-radius: 40px;
+            border: 1px solid #cbdde6;
+            background: white;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .footer {
+            background: #e6f0f9;
+            border-radius: 28px;
+            padding: 14px 20px;
+            text-align: center;
+            font-size: 0.8rem;
+            margin-top: 20px;
+            color: #1c4a73;
+        }
+
+        .status-msg {
+            background: #eef2ff;
+            border-left: 4px solid #3b82f6;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            margin-bottom: 16px;
+            display: inline-block;
+        }
+
+        @media (max-width: 800px) {
+            .staff-name-cell {
+                font-size: 0.8rem;
+            }
+            select {
+                font-size: 0.7rem;
+                padding: 6px 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🗓️ Staff Shift Scheduler + Google Sheets Sync</h1>
+        <div class="sub">Each staff member selects Morning / Afternoon / Off for Monday → Sunday · 3 outlets · Data syncs with your Google Sheet</div>
+        <div class="toolbar">
+            <div class="btn-group">
+                <button id="exportBtn" class="primary">💾 Export JSON</button>
+                <button id="importBtn">📂 Import JSON</button>
+                <input type="file" id="importFileInput" accept=".json" style="display: none;">
+                <button id="resetAllBtn" class="danger">⚠️ Reset all data</button>
+                <button id="pushToSheetsBtn" class="google-sync">📤 Push to Google Sheet</button>
+                <button id="pullFromSheetsBtn" class="google-sync">📥 Pull from Google Sheet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Staff roster editor -->
+    <div class="staff-panel">
+        <div class="staff-input-group">
+            <label>👥 Staff names (comma separated · 6–7 recommended)</label>
+            <input type="text" id="staffListInput" placeholder="e.g. Amy, Ben, Carla, David, Emma, Fiona, George">
+        </div>
+        <button id="updateStaffBtn" class="primary">🔄 Update staff list</button>
+        <small style="color:#936f2b;">▼ After updating, tables refresh automatically. Each staff row appears for all outlets.</small>
+    </div>
+
+    <!-- Google Apps Script URL configuration -->
+    <div style="background:#eef2fa; border-radius: 28px; padding: 12px 20px; margin-bottom: 24px;">
+        <label style="font-weight:700; display:flex; align-items:center; gap:8px;">🔗 Google Apps Script Web App URL:</label>
+        <input type="text" id="googleScriptUrl" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%; padding:10px; border-radius:60px; border:1px solid #bdd4e7; margin-top:6px; font-family:monospace;">
+        <div style="font-size:0.7rem; margin-top:8px; color:#2c5a7a;">
+            ⚙️ Setup: Create Google Sheet → Extensions → Apps Script → Paste the code (provided below) → Deploy as web app → Copy URL here.
+        </div>
+    </div>
+
+    <div id="outletsContainer"></div>
+
+    <div class="footer">
+        ✅ How to use: For each outlet, every staff member has a dropdown per day. Choose "Morning shift", "Afternoon shift", or "Off".<br>
+        💾 All changes save automatically in browser. Use Push/Pull to sync with Google Sheets.
+    </div>
+</div>
+
+<script>
+    // ======================= OUTLET & SHIFT DEFINITIONS =======================
+    const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+    const OUTLETS = [
+        {
+            id: "gurney",
+            name: "🏬 Gurney Paragon",
+            hours: "10:00 AM – 10:00 PM",
+            shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00" }
+        },
+        {
+            id: "sunshine",
+            name: "☀️ Sunshine Central",
+            hours: "10:00 AM – 10:30 PM",
+            shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:30" }
+        },
+        {
+            id: "queens",
+            name: "🛍️ Queens Mall",
+            hours: "10:30 AM – 10:30 PM",
+            shiftTimes: { morning: "10:30 – 16:00", afternoon: "16:30 – 22:30" }
+        }
+    ];
+
+    const DEFAULT_STAFF = ["Amy Chen", "Ben Lee", "Carla Raj", "David Lim", "Emma Tan", "Fiona Wong", "George Kumar"];
+    let currentStaffList = [...DEFAULT_STAFF];
+
+    // Storage keys
+    const STORAGE_ASSIGNMENTS = "staff_dropdown_weekly_v3";
+    const STORAGE_STAFF = "staff_dropdown_weekly_staff_v3";
+
+    // assignments format: { "outletId|staffName|dayIdx": "morning"/"afternoon"/"" }
+    let assignments = {};
+
+    // Helper: key
+    function getKey(outletId, staffName, dayIdx) {
+        return `${outletId}|${staffName}|${dayIdx}`;
+    }
+
+    function loadAssignments() {
+        const stored = localStorage.getItem(STORAGE_ASSIGNMENTS);
+        if (stored) {
+            try {
+                assignments = JSON.parse(stored);
+            } catch(e) { assignments = {}; }
+        } else {
+            assignments = {};
+        }
+    }
+
+    function saveAssignments() {
+        localStorage.setItem(STORAGE_ASSIGNMENTS, JSON.stringify(assignments));
+    }
+
+    function loadStaff() {
+        const storedStaff = localStorage.getItem(STORAGE_STAFF);
+        if (storedStaff) {
+            try {
+                const arr = JSON.parse(storedStaff);
+                if (Array.isArray(arr) && arr.length > 0) currentStaffList = arr;
+                else currentStaffList = [...DEFAULT_STAFF];
+            } catch(e) { currentStaffList = [...DEFAULT_STAFF]; }
+        } else {
+            currentStaffList = [...DEFAULT_STAFF];
+        }
+        const inputField = document.getElementById('staffListInput');
+        if (inputField) inputField.value = currentStaffList.join(', ');
+    }
+
+    function saveStaff() {
+        localStorage.setItem(STORAGE_STAFF, JSON.stringify(currentStaffList));
+    }
+
+    function getAssignment(outletId, staffName, dayIdx) {
+        return assignments[getKey(outletId, staffName, dayIdx)] || "";
+    }
+
+    function setAssignment(outletId, staffName, dayIdx, shiftValue) {
+        const key = getKey(outletId, staffName, dayIdx);
+        if (!shiftValue || shiftValue === "") {
+            delete assignments[key];
+        } else {
+            assignments[key] = shiftValue;
+        }
+        saveAssignments();
+        renderAllOutlets();
+    }
+
+    function resetAllData() {
+        if (confirm("⚠️ This will DELETE all shift selections. Staff list will also reset. Continue?")) {
+            assignments = {};
+            currentStaffList = [...DEFAULT_STAFF];
+            saveAssignments();
+            saveStaff();
+            document.getElementById('staffListInput').value = currentStaffList.join(', ');
+            renderAllOutlets();
+        }
+    }
+
+    function exportSchedule() {
+        const exportObj = {
+            version: "3.0",
+            exportedAt: new Date().toISOString(),
+            staffList: currentStaffList,
+            assignments: assignments,
+            outlets: OUTLETS.map(o => ({ id: o.id, name: o.name }))
+        };
+        const dataStr = JSON.stringify(exportObj, null, 2);
+        const blob = new Blob([dataStr], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `staff_weekly_shifts_${new Date().toISOString().slice(0,19)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function importSchedule(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (imported.staffList && Array.isArray(imported.staffList) && imported.staffList.length > 0) {
+                    currentStaffList = imported.staffList;
+                    saveStaff();
+                    document.getElementById('staffListInput').value = currentStaffList.join(', ');
+                }
+                if (imported.assignments && typeof imported.assignments === 'object') {
+                    assignments = imported.assignments;
+                    saveAssignments();
+                }
+                renderAllOutlets();
+                alert("✅ Import successful!");
+            } catch(err) {
+                alert("Invalid JSON file.");
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function updateStaffFromInput() {
+        const raw = document.getElementById('staffListInput').value;
+        let names = raw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (names.length === 0) {
+            alert("Staff list cannot be empty.");
+            return;
+        }
+        const unique = [];
+        const seen = new Set();
+        for (let n of names) {
+            if (!seen.has(n)) {
+                seen.add(n);
+                unique.push(n);
+            }
+        }
+        if (unique.length < 2) {
+            alert("At least 2 staff members needed.");
+            return;
+        }
+        const oldStaffSet = new Set(currentStaffList);
+        const newStaffSet = new Set(unique);
+        for (let key in assignments) {
+            const parts = key.split('|');
+            if (parts.length === 3) {
+                const staff = parts[1];
+                if (!newStaffSet.has(staff)) {
+                    delete assignments[key];
+                }
+            }
+        }
+        currentStaffList = unique;
+        saveStaff();
+        saveAssignments();
+        renderAllOutlets();
+        alert(`Staff updated (${currentStaffList.length} people).`);
+    }
+
+    // ======================= GOOGLE SHEETS SYNC =======================
+    function getScriptUrl() {
+        let url = document.getElementById('googleScriptUrl').value.trim();
+        if (!url) {
+            alert("Please enter your Google Apps Script Web App URL in the field above.");
+            return null;
+        }
+        return url;
+    }
+
+    async function pushToGoogleSheets() {
+        const url = getScriptUrl();
+        if (!url) return;
+
+        const payload = {
+            action: "push",
+            staffList: currentStaffList,
+            assignments: assignments,
+            outlets: OUTLETS.map(o => ({ id: o.id, name: o.name, shiftTimes: o.shiftTimes }))
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                mode: "cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.status === "success") {
+                alert("✅ Data successfully written to Google Sheet!");
+            } else {
+                alert("❌ Error from Google Script: " + (result.error || "unknown"));
+            }
+        } catch (err) {
+            alert("Network error. Check your script URL and ensure it's deployed as 'Anyone' with access.\n" + err);
+        }
+    }
+
+    async function pullFromGoogleSheets() {
+        const url = getScriptUrl();
+        if (!url) return;
+
+        const payload = { action: "pull" };
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                mode: "cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.status === "success" && result.data) {
+                if (result.data.staffList) {
+                    currentStaffList = result.data.staffList;
+                    saveStaff();
+                    document.getElementById('staffListInput').value = currentStaffList.join(', ');
+                }
+                if (result.data.assignments) {
+                    assignments = result.data.assignments;
+                    saveAssignments();
+                }
+                renderAllOutlets();
+                alert("✅ Data loaded from Google Sheet!");
+            } else {
+                alert("Failed to pull: " + (result.error || "no data"));
+            }
+        } catch (err) {
+            alert("Error pulling from sheet: " + err);
+        }
+    }
+
+    // ======================= RENDER TABLES =======================
+    function renderAllOutlets() {
+        const container = document.getElementById('outletsContainer');
+        if (!container) return;
+        container.innerHTML = '';
+
+        for (let outlet of OUTLETS) {
+            const card = document.createElement('div');
+            card.className = 'outlet-card';
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'outlet-title';
+            titleDiv.innerHTML = `
+                <div class="outlet-name">
+                    ${outlet.name}
+                    <span class="hours-badge">🕒 ${outlet.hours}</span>
+                </div>
+                <div style="font-size:0.7rem; margin-top:6px; color:#3c6e9c;">
+                    🌅 Morning: ${outlet.shiftTimes.morning} &nbsp;|&nbsp; 🌙 Afternoon: ${outlet.shiftTimes.afternoon}
+                </div>
+            `;
+            card.appendChild(titleDiv);
+
+            const table = document.createElement('table');
+            table.className = 'shift-table';
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            const thStaff = document.createElement('th');
+            thStaff.textContent = "Staff Name";
+            headerRow.appendChild(thStaff);
+            for (let day of DAYS) {
+                const th = document.createElement('th');
+                th.textContent = day;
+                headerRow.appendChild(th);
+            }
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            for (let staff of currentStaffList) {
+                const row = document.createElement('tr');
+                const nameCell = document.createElement('td');
+                nameCell.className = 'staff-name-cell';
+                nameCell.textContent = staff;
+                row.appendChild(nameCell);
+
+                for (let dayIdx = 0; dayIdx < DAYS.length; dayIdx++) {
+                    const cell = document.createElement('td');
+                    const currentShift = getAssignment(outlet.id, staff, dayIdx);
+                    const select = document.createElement('select');
+                    const offOpt = document.createElement('option');
+                    offOpt.value = "";
+                    offOpt.textContent = "— Off / Free —";
+                    if (currentShift === "") offOpt.selected = true;
+                    select.appendChild(offOpt);
+                    const morningOpt = document.createElement('option');
+                    morningOpt.value = "morning";
+                    morningOpt.textContent = `🌅 Morning (${outlet.shiftTimes.morning})`;
+                    if (currentShift === "morning") morningOpt.selected = true;
+                    select.appendChild(morningOpt);
+                    const afternoonOpt = document.createElement('option');
+                    afternoonOpt.value = "afternoon";
+                    afternoonOpt.textContent = `🌙 Afternoon (${outlet.shiftTimes.afternoon})`;
+                    if (currentShift === "afternoon") afternoonOpt.selected = true;
+                    select.appendChild(afternoonOpt);
+                    select.addEventListener('change', (function(outletId, staffName, dayIdx, sel) {
+                        return function() { setAssignment(outletId, staffName, dayIdx, sel.value); };
+                    })(outlet.id, staff, dayIdx, select));
+                    cell.appendChild(select);
+                    row.appendChild(cell);
+                }
+                tbody.appendChild(row);
+            }
+            table.appendChild(tbody);
+            card.appendChild(table);
+            container.appendChild(card);
+        }
+
+        const summary = document.createElement('div');
+        summary.style.marginTop = '24px';
+        summary.style.padding = '12px';
+        summary.style.backgroundColor = '#eef3fa';
+        summary.style.borderRadius = '24px';
+        summary.style.textAlign = 'center';
+        let totalSelections = 0;
+        for (let key in assignments) {
+            if (assignments[key] && assignments[key] !== "") totalSelections++;
+        }
+        const totalPossible = OUTLETS.length * currentStaffList.length * DAYS.length;
+        summary.innerHTML = `📊 Overall summary · ${totalSelections} shifts assigned out of ${totalPossible} possible slots · Each dropdown = pick shift type.`;
+        container.appendChild(summary);
+    }
+
+    // ======================= INIT =======================
+    function init() {
+        loadStaff();
+        loadAssignments();
+        renderAllOutlets();
+
+        document.getElementById('updateStaffBtn').addEventListener('click', updateStaffFromInput);
+        document.getElementById('exportBtn').addEventListener('click', exportSchedule);
+        document.getElementById('resetAllBtn').addEventListener('click', resetAllData);
+        const importBtn = document.getElementById('importBtn');
+        const fileInput = document.getElementById('importFileInput');
+        importBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                importSchedule(e.target.files[0]);
+                fileInput.value = '';
+            }
+        });
+        document.getElementById('pushToSheetsBtn').addEventListener('click', pushToGoogleSheets);
+        document.getElementById('pullFromSheetsBtn').addEventListener('click', pullFromGoogleSheets);
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+
+<!-- ======================= INSTRUCTIONS & APPS SCRIPT CODE ======================= -->
+<div style="display:none;">
+<!-- 
+    ##############################################################
+    #  GOOGLE APPS SCRIPT CODE (Copy this into your Sheet's Apps Script)
+    ##############################################################
+    
+    // 1. Create a Google Sheet
+    // 2. Extensions → Apps Script
+    // 3. Replace default code with the script below
+    // 4. Deploy → New deployment → Web app → Execute as "Me", Access "Anyone"
+    // 5. Copy the URL and paste into the field on this HTML page.
+
+    function doPost(e) {
+      try {
+        const data = JSON.parse(e.postData.contents);
+        const action = data.action;
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+        
+        if (action === "push") {
+          // Clear sheet and write headers
+          sheet.clear();
+          const headers = ["OutletId", "OutletName", "StaffName", "Day", "DayIndex", "ShiftAssigned", "ShiftTimeRange"];
+          sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+          
+          const rows = [];
+          const outlets = data.outlets;
+          const assignments = data.assignments;
+          const staffList = data.staffList;
+          const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+          
+          for (let outlet of outlets) {
+            for (let staff of staffList) {
+              for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
+                const key = `${outlet.id}|${staff}|${dayIdx}`;
+                const shift = assignments[key] || "";
+                let shiftRange = "";
+                if (shift === "morning") shiftRange = outlet.shiftTimes.morning;
+                else if (shift === "afternoon") shiftRange = outlet.shiftTimes.afternoon;
+                else shiftRange = "Off";
+                rows.push([
+                  outlet.id,
+                  outlet.name,
+                  staff,
+                  days[dayIdx],
+                  dayIdx,
+                  shift,
+                  shiftRange
+                ]);
+              }
+            }
+          }
+          if (rows.length > 0) {
+            sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+          }
+          return ContentService.createTextOutput(JSON.stringify({status: "success"}))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+        else if (action === "pull") {
+          const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+          const lastRow = sheet.getLastRow();
+          if (lastRow < 2) {
+            return ContentService.createTextOutput(JSON.stringify({status: "success", data: { staffList: [], assignments: {} }}))
+              .setMimeType(ContentService.MimeType.JSON);
+          }
+          const rows = sheet.getRange(2, 1, lastRow-1, 7).getValues();
+          const assignmentsMap = {};
+          const staffSet = new Set();
+          for (let row of rows) {
+            const outletId = row[0];
+            const staffName = row[2];
+            const dayIdx = row[4];
+            const shift = row[5];
+            if (shift && shift !== "") {
+              const key = `${outletId}|${staffName}|${dayIdx}`;
+              assignmentsMap[key] = shift;
+              staffSet.add(staffName);
+            }
+          }
+          const staffList = Array.from(staffSet);
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "success",
+            data: {
+              staffList: staffList,
+              assignments: assignmentsMap
+            }
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+        else {
+          return ContentService.createTextOutput(JSON.stringify({status: "error", error: "Invalid action"}))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      } catch(err) {
+        return ContentService.createTextOutput(JSON.stringify({status: "error", error: err.toString()}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+-->
+</div>
+</body>
+</html>
