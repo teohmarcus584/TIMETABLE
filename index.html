@@ -13,7 +13,9 @@
     .toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; align-items: center; justify-content: space-between; }
     button { background: white; border: 1px solid #cbd5e1; border-radius: 40px; padding: 8px 18px; cursor: pointer; transition: 0.2s; font-weight: 500; }
     button.primary { background: #3b82f6; border-color: #3b82f6; color: white; }
+    button.google { background: #0f9d58; border-color: #0f9d58; color: white; }
     button.danger { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
+    button.small { padding: 4px 12px; font-size: 0.8rem; }
     button:hover { transform: translateY(-1px); filter: brightness(0.97); }
     .week-selector { display: flex; align-items: center; gap: 16px; background: #f8fafc; padding: 12px 20px; border-radius: 60px; margin-top: 12px; flex-wrap: wrap; }
     .week-selector label { font-weight: 600; }
@@ -48,6 +50,10 @@
     </div>
     <div class="toolbar">
       <div>
+        <button id="pushBtn" class="google">📤 Push to Google Sheet</button>
+        <button id="pullBtn" class="google">📥 Pull from Google Sheet</button>
+      </div>
+      <div>
         <button id="exportBtn" class="primary">💾 Export JSON</button>
         <button id="importBtn">📂 Import JSON</button>
         <input type="file" id="importFile" accept=".json" style="display:none">
@@ -58,8 +64,7 @@
 
   <div id="outletsContainer"></div>
   <div class="footer">
-    📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.<br>
-    💾 All data saves automatically in your browser. Use Export/Import to backup or share.
+    📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.
   </div>
 </div>
 
@@ -77,6 +82,10 @@
 </div>
 
 <script>
+  // ==================== 🔴 PASTE YOUR GOOGLE SCRIPT URL HERE ====================
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwf6MVfTUG363PabxNLw9v7ri-z7LZoyKeTBoiO4rI89yGB9oYUWwR9XDyFqUlG1RNnAg/exec';
+  // ============================================================================
+
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const OUTLETS = [
     { 
@@ -270,6 +279,48 @@
     renderAll();
   }
 
+  // ==================== GOOGLE SHEETS SYNC (using hardcoded URL) ====================
+  async function callScript(action, data = {}) {
+    if (!SCRIPT_URL) {
+      alert("Google Sheets URL is not set. Please edit the HTML and add your script URL to the 'SCRIPT_URL' constant.");
+      return null;
+    }
+    const formData = new URLSearchParams();
+    formData.append('action', action);
+    for (let [k, v] of Object.entries(data)) formData.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
+    try {
+      const res = await fetch(SCRIPT_URL, { method: 'POST', body: formData });
+      const json = await res.json();
+      if (json.status === 'success') return json.data;
+      else throw new Error(json.error || 'Unknown error');
+    } catch (err) {
+      alert(`Sync error: ${err.message}\nCheck URL and redeploy script with "Anyone" access.`);
+      return null;
+    }
+  }
+
+  async function pushToSheet() {
+    const payload = {
+      weekStart: currentWeekStart,
+      staffPerStore: staffPerStore,
+      assignments: assignments,
+      outlets: OUTLETS.map(o => ({ id: o.id, name: o.name, shiftTimes: o.shiftTimes }))
+    };
+    const result = await callScript('push', payload);
+    if (result) alert("✅ Pushed to Google Sheet!");
+  }
+
+  async function pullFromSheet() {
+    const result = await callScript('pull', { weekStart: currentWeekStart });
+    if (result) {
+      if (result.staffPerStore) staffPerStore = result.staffPerStore;
+      if (result.assignments) assignments = result.assignments;
+      saveLocal();
+      renderAll();
+      alert("✅ Pulled from Google Sheet!");
+    }
+  }
+
   function exportJSON() {
     const data = { staffPerStore, assignments };
     const a = document.createElement('a');
@@ -310,6 +361,8 @@
   renderAll();
 
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
+  document.getElementById('pushBtn').onclick = pushToSheet;
+  document.getElementById('pullBtn').onclick = pullFromSheet;
   document.getElementById('exportBtn').onclick = exportJSON;
   document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
   document.getElementById('importFile').onchange = e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; };
