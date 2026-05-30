@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Staff Timetable | Per‑Store Staff Lists</title>
+  <title>Weekly Timetable | Morning / Afternoon / Full Shift</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -17,6 +17,9 @@
     button.danger { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
     button.small { padding: 4px 12px; font-size: 0.8rem; }
     button:hover { transform: translateY(-1px); filter: brightness(0.97); }
+    .week-selector { display: flex; align-items: center; gap: 16px; background: #f8fafc; padding: 12px 20px; border-radius: 60px; margin-top: 12px; flex-wrap: wrap; }
+    .week-selector label { font-weight: 600; }
+    input[type="date"] { padding: 8px 16px; border-radius: 40px; border: 1px solid #cbd5e1; font-size: 0.9rem; }
     .outlet-card { background: white; border-radius: 28px; margin-bottom: 32px; overflow-x: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .outlet-title { background: #f8fafc; padding: 16px 20px; border-bottom: 2px solid #e2edff; font-weight: 700; font-size: 1.3rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
     .hours { font-size: 0.8rem; color: #3b82f6; background: #eef2ff; display: inline-block; padding: 4px 12px; border-radius: 40px; }
@@ -38,8 +41,13 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Per‑Store Staff</h1>
-    <div>Monday – Sunday | Morning & Afternoon shifts</div>
+    <h1>🗓️ Staff Timetable · Morning / Afternoon / Full Shift</h1>
+    <div>Select week → each column shows day + date</div>
+    <div class="week-selector">
+      <label>📅 Week starting Monday:</label>
+      <input type="date" id="weekStartPicker" value="">
+      <span id="weekRangeDisplay" style="font-size:0.9rem; color:#475569;"></span>
+    </div>
     <div class="toolbar">
       <div>
         <button id="pushBtn" class="google">📤 Push to Google Sheet</button>
@@ -56,8 +64,7 @@
 
   <div id="outletsContainer"></div>
   <div class="footer">
-    🔗 Google Sheets URL: <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec" style="width:60%; font-family:monospace; border-radius:40px; border:1px solid #ccc; padding:6px 12px;">
-    <br>📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.
+    📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.
   </div>
 </div>
 
@@ -75,12 +82,24 @@
 </div>
 
 <script>
-  // ==================== CONFIGURATION ====================
-  const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  // ==================== 🔴 PASTE YOUR GOOGLE SCRIPT URL HERE ====================
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwf6MVfTUG363PabxNLw9v7ri-z7LZoyKeTBoiO4rI89yGB9oYUWwR9XDyFqUlG1RNnAg/exec';
+  // ============================================================================
+
+  const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const OUTLETS = [
-    { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00" } },
-    { id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:30", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:30" } },
-    { id: "queens", name: "🛍️ Queens Mall", hours: "10:30 – 22:30", shiftTimes: { morning: "10:30 – 16:00", afternoon: "16:30 – 22:30" } }
+    { 
+      id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00",
+      shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" }
+    },
+    { 
+      id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:30",
+      shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:30", full: "10:00 – 22:30" }
+    },
+    { 
+      id: "queens", name: "🛍️ Queens Mall", hours: "10:30 – 22:30",
+      shiftTimes: { morning: "10:30 – 16:00", afternoon: "16:30 – 22:30", full: "10:30 – 22:30" }
+    }
   ];
   const DEFAULT_STAFF_PER_STORE = {
     gurney: ["Amy Chen", "Ben Lee", "Carla Raj"],
@@ -90,9 +109,10 @@
 
   let staffPerStore = {};
   let assignments = {};
+  let currentWeekStart = null;
 
   const STORAGE_STAFF = "timetable_staff_per_store";
-  const STORAGE_ASSIGN = "timetable_assign_v3";
+  const STORAGE_ASSIGN = "timetable_assign_v5";
 
   function loadLocal() {
     const storedStaff = localStorage.getItem(STORAGE_STAFF);
@@ -104,17 +124,36 @@
     localStorage.setItem(STORAGE_STAFF, JSON.stringify(staffPerStore));
     localStorage.setItem(STORAGE_ASSIGN, JSON.stringify(assignments));
   }
-  function getKey(outletId, staff, dayIdx) { return `${outletId}|${staff}|${dayIdx}`; }
-  function getAssignment(outletId, staff, dayIdx) { return assignments[getKey(outletId, staff, dayIdx)] || ""; }
-  function setAssignment(outletId, staff, dayIdx, value) {
-    const key = getKey(outletId, staff, dayIdx);
+
+  function getMonday(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = (day === 0 ? 6 : day - 1);
+    d.setDate(d.getDate() - diff);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+  function formatDate(date) {
+    return date.toISOString().split('T')[0];
+  }
+  function formatDateShort(date) {
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function getKey(weekStart, outletId, staff, dayIdx) {
+    return `${weekStart}|${outletId}|${staff}|${dayIdx}`;
+  }
+  function getAssignment(weekStart, outletId, staff, dayIdx) {
+    return assignments[getKey(weekStart, outletId, staff, dayIdx)] || "";
+  }
+  function setAssignment(weekStart, outletId, staff, dayIdx, value) {
+    const key = getKey(weekStart, outletId, staff, dayIdx);
     if (!value) delete assignments[key];
     else assignments[key] = value;
     saveLocal();
     renderAll();
   }
 
-  // ==================== PER‑STORE STAFF MODAL ====================
   let currentEditingOutlet = null;
   function openStaffModal(outletId) {
     currentEditingOutlet = outletId;
@@ -133,10 +172,9 @@
     const raw = document.getElementById('modalStaffInput').value;
     const newList = raw.split(',').map(s=>s.trim()).filter(s=>s);
     staffPerStore[currentEditingOutlet] = newList;
-    // Remove assignments for staff no longer in the list
     for (let key in assignments) {
       const parts = key.split('|');
-      if (parts[0] === currentEditingOutlet && !newList.includes(parts[1])) {
+      if (parts.length === 4 && parts[1] === currentEditingOutlet && !newList.includes(parts[2])) {
         delete assignments[key];
       }
     }
@@ -145,10 +183,23 @@
     closeStaffModal();
   }
 
-  // ==================== RENDER TABLES ====================
+  function getWeekDates(mondayDate) {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(mondayDate);
+      d.setDate(mondayDate.getDate() + i);
+      dates.push(d);
+    }
+    return dates;
+  }
+
   function renderAll() {
+    if (!currentWeekStart) return;
     const container = document.getElementById('outletsContainer');
     container.innerHTML = '';
+    const weekDates = getWeekDates(new Date(currentWeekStart));
+    const headerLabels = weekDates.map(d => `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]}, ${formatDateShort(d)}`);
+
     for (let outlet of OUTLETS) {
       const staffList = staffPerStore[outlet.id] || [];
       const card = document.createElement('div');
@@ -158,7 +209,7 @@
           <span>${outlet.name} <span class="hours">🕒 ${outlet.hours}</span></span>
           <button class="edit-staff-btn" data-outlet="${outlet.id}">✏️ Edit Staff</button>
         </div>
-        <div style="font-size:0.7rem; padding: 0 20px 8px;">🌅 Morning: ${outlet.shiftTimes.morning} &nbsp;|&nbsp; 🌙 Afternoon: ${outlet.shiftTimes.afternoon}</div>
+        <div style="font-size:0.7rem; padding: 0 20px 8px;">🌅 Morning: ${outlet.shiftTimes.morning} &nbsp;|&nbsp; 🌙 Afternoon: ${outlet.shiftTimes.afternoon} &nbsp;|&nbsp; 🌞 Full: ${outlet.shiftTimes.full}</div>
       `;
       card.querySelector('.edit-staff-btn').addEventListener('click', () => openStaffModal(outlet.id));
       
@@ -178,7 +229,11 @@
       const thead = document.createElement('thead');
       const headerRow = document.createElement('tr');
       headerRow.appendChild(document.createElement('th')).textContent = 'Staff / Day';
-      DAYS.forEach(day => { const th = document.createElement('th'); th.textContent = day; headerRow.appendChild(th); });
+      headerLabels.forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        headerRow.appendChild(th);
+      });
       thead.appendChild(headerRow);
       table.appendChild(thead);
       const tbody = document.createElement('tbody');
@@ -188,14 +243,15 @@
         nameCell.className = 'staff-name-cell';
         nameCell.textContent = staff;
         row.appendChild(nameCell);
-        for (let dayIdx = 0; dayIdx < DAYS.length; dayIdx++) {
+        for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
           const cell = document.createElement('td');
-          const current = getAssignment(outlet.id, staff, dayIdx);
+          const current = getAssignment(currentWeekStart, outlet.id, staff, dayIdx);
           const select = document.createElement('select');
           const offOpt = document.createElement('option'); offOpt.value = ""; offOpt.textContent = "— Off —"; if (current === "") offOpt.selected = true; select.appendChild(offOpt);
           const mornOpt = document.createElement('option'); mornOpt.value = "morning"; mornOpt.textContent = `🌅 Morning (${outlet.shiftTimes.morning})`; if (current === "morning") mornOpt.selected = true; select.appendChild(mornOpt);
           const aftOpt = document.createElement('option'); aftOpt.value = "afternoon"; aftOpt.textContent = `🌙 Afternoon (${outlet.shiftTimes.afternoon})`; if (current === "afternoon") aftOpt.selected = true; select.appendChild(aftOpt);
-          select.addEventListener('change', ((o, s, d) => () => setAssignment(o.id, s, d, select.value))(outlet, staff, dayIdx));
+          const fullOpt = document.createElement('option'); fullOpt.value = "full"; fullOpt.textContent = `🌞 Full Day (${outlet.shiftTimes.full})`; if (current === "full") fullOpt.selected = true; select.appendChild(fullOpt);
+          select.addEventListener('change', ((o, s, d) => () => setAssignment(currentWeekStart, o.id, s, d, select.value))(outlet, staff, dayIdx));
           cell.appendChild(select);
           row.appendChild(cell);
         }
@@ -205,17 +261,35 @@
       card.appendChild(table);
       container.appendChild(card);
     }
+    const startDate = new Date(currentWeekStart);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    document.getElementById('weekRangeDisplay').innerText = `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
   }
 
-  // ==================== GOOGLE SHEETS SYNC ====================
+  function setWeekFromPicker() {
+    let pickerVal = document.getElementById('weekStartPicker').value;
+    if (!pickerVal) {
+      const today = new Date();
+      const monday = getMonday(today);
+      pickerVal = formatDate(monday);
+      document.getElementById('weekStartPicker').value = pickerVal;
+    }
+    currentWeekStart = pickerVal;
+    renderAll();
+  }
+
+  // ==================== GOOGLE SHEETS SYNC (using hardcoded URL) ====================
   async function callScript(action, data = {}) {
-    const url = document.getElementById('scriptUrl').value.trim();
-    if (!url) { alert("Please paste your Google Apps Script Web App URL."); return null; }
+    if (!SCRIPT_URL) {
+      alert("Google Sheets URL is not set. Please edit the HTML and add your script URL to the 'SCRIPT_URL' constant.");
+      return null;
+    }
     const formData = new URLSearchParams();
     formData.append('action', action);
     for (let [k, v] of Object.entries(data)) formData.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
     try {
-      const res = await fetch(url, { method: 'POST', body: formData });
+      const res = await fetch(SCRIPT_URL, { method: 'POST', body: formData });
       const json = await res.json();
       if (json.status === 'success') return json.data;
       else throw new Error(json.error || 'Unknown error');
@@ -227,6 +301,7 @@
 
   async function pushToSheet() {
     const payload = {
+      weekStart: currentWeekStart,
       staffPerStore: staffPerStore,
       assignments: assignments,
       outlets: OUTLETS.map(o => ({ id: o.id, name: o.name, shiftTimes: o.shiftTimes }))
@@ -236,7 +311,7 @@
   }
 
   async function pullFromSheet() {
-    const result = await callScript('pull');
+    const result = await callScript('pull', { weekStart: currentWeekStart });
     if (result) {
       if (result.staffPerStore) staffPerStore = result.staffPerStore;
       if (result.assignments) assignments = result.assignments;
@@ -246,12 +321,11 @@
     }
   }
 
-  // ==================== JSON EXPORT/IMPORT ====================
   function exportJSON() {
     const data = { staffPerStore, assignments };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
-    a.download = `timetable_${new Date().toISOString().slice(0,19)}.json`;
+    a.download = `timetable_${currentWeekStart}.json`;
     a.click();
   }
   function importJSON(file) {
@@ -280,7 +354,13 @@
 
   // ==================== INIT ====================
   loadLocal();
+  const today = new Date();
+  const defaultMonday = getMonday(today);
+  document.getElementById('weekStartPicker').value = formatDate(defaultMonday);
+  currentWeekStart = formatDate(defaultMonday);
   renderAll();
+
+  document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
   document.getElementById('pushBtn').onclick = pushToSheet;
   document.getElementById('pullBtn').onclick = pullFromSheet;
   document.getElementById('exportBtn').onclick = exportJSON;
@@ -290,80 +370,6 @@
   document.getElementById('saveStaffModalBtn').onclick = saveStaffModal;
   document.getElementById('closeStaffModalBtn').onclick = closeStaffModal;
   document.getElementById('editStaffModal').addEventListener('click', (e) => { if(e.target === document.getElementById('editStaffModal')) closeStaffModal(); });
-  
-  const savedUrl = localStorage.getItem('timetable_script_url');
-  if (savedUrl) document.getElementById('scriptUrl').value = savedUrl;
-  document.getElementById('scriptUrl').addEventListener('change', () => localStorage.setItem('timetable_script_url', document.getElementById('scriptUrl').value));
 </script>
-
-<!-- Google Apps Script Code – copy into your Sheet's Apps Script -->
-<!--
-function doPost(e) {
-  const data = e.parameter;
-  const action = data.action;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  let result = { status: "error", error: "Invalid action" };
-  
-  if (action === "push") {
-    try {
-      const staffPerStore = JSON.parse(data.staffPerStore);
-      const assignments = JSON.parse(data.assignments);
-      const outlets = JSON.parse(data.outlets);
-      
-      sheet.clear();
-      const headers = ["OutletId","OutletName","StaffName","Day","DayIndex","ShiftAssigned","ShiftTimeRange","StoreStaffList"];
-      sheet.getRange(1,1,1,headers.length).setValues([headers]);
-      const rows = [];
-      const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-      for (let outlet of outlets) {
-        const staffList = staffPerStore[outlet.id] || [];
-        for (let staff of staffList) {
-          for (let d=0; d<days.length; d++) {
-            const key = `${outlet.id}|${staff}|${d}`;
-            const shift = assignments[key] || "";
-            let range = "";
-            if (shift === "morning") range = outlet.shiftTimes.morning;
-            else if (shift === "afternoon") range = outlet.shiftTimes.afternoon;
-            else range = "Off";
-            rows.push([outlet.id, outlet.name, staff, days[d], d, shift, range, staffList.join(",")]);
-          }
-        }
-      }
-      if (rows.length) sheet.getRange(2,1,rows.length,headers.length).setValues(rows);
-      result = { status: "success" };
-    } catch(err) { result = { status: "error", error: err.toString() }; }
-  }
-  else if (action === "pull") {
-    try {
-      const lastRow = sheet.getLastRow();
-      if (lastRow < 2) {
-        result = { status: "success", data: { staffPerStore: {}, assignments: {} } };
-      } else {
-        const rows = sheet.getRange(2,1,lastRow-1,8).getValues();
-        const assignmentsMap = {};
-        const staffPerStoreMap = {};
-        for (let row of rows) {
-          const outletId = row[0];
-          const staff = row[2];
-          const dayIdx = row[4];
-          const shift = row[5];
-          const storeStaffList = row[7] ? row[7].split(",") : [];
-          if (storeStaffList.length) staffPerStoreMap[outletId] = storeStaffList;
-          if (shift && shift !== "") {
-            const key = `${outletId}|${staff}|${dayIdx}`;
-            assignmentsMap[key] = shift;
-          }
-        }
-        result = { status: "success", data: { staffPerStore: staffPerStoreMap, assignments: assignmentsMap } };
-      }
-    } catch(err) { result = { status: "error", error: err.toString() }; }
-  }
-  
-  const output = ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader("Access-Control-Allow-Origin", "*");
-  return output;
-}
--->
 </body>
 </html>
