@@ -17,11 +17,6 @@
     button.danger { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
     button.small { padding: 4px 12px; font-size: 0.8rem; }
     button:hover { transform: translateY(-1px); filter: brightness(0.97); }
-    .staff-panel { background: #fff9e8; border: 1px solid #fde047; border-radius: 28px; padding: 16px 20px; margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
-    .staff-list-editor { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 12px; }
-    .store-staff-card { background: white; border-radius: 20px; padding: 12px; border: 1px solid #e2e8f0; flex: 1; min-width: 200px; }
-    .store-staff-card h4 { margin: 0 0 8px; font-size: 1rem; }
-    .store-staff-card input { width: 100%; padding: 8px; border-radius: 40px; border: 1px solid #cbd5e1; font-size: 0.8rem; }
     .outlet-card { background: white; border-radius: 28px; margin-bottom: 32px; overflow-x: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .outlet-title { background: #f8fafc; padding: 16px 20px; border-bottom: 2px solid #e2edff; font-weight: 700; font-size: 1.3rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
     .hours { font-size: 0.8rem; color: #3b82f6; background: #eef2ff; display: inline-block; padding: 4px 12px; border-radius: 40px; }
@@ -32,13 +27,12 @@
     .staff-name-cell { font-weight: 600; background: #fefce8; }
     select { width: 100%; padding: 8px 6px; border-radius: 40px; border: 1px solid #cbd5e1; background: white; font-size: 0.8rem; }
     .footer { background: #eef2ff; border-radius: 24px; padding: 12px; text-align: center; font-size: 0.8rem; margin-top: 20px; }
-    .status-msg { font-size: 0.8rem; padding: 4px 12px; border-radius: 40px; background: #e8f5e9; color: #2c7a4b; }
     .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal-content { background: white; border-radius: 32px; padding: 24px; width: 90%; max-width: 500px; }
     .modal-content h3 { margin-top: 0; }
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
-    @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } .store-staff-card { min-width: 100%; } }
+    @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
   </style>
 </head>
 <body>
@@ -58,12 +52,6 @@
         <button id="resetBtn" class="danger">⚠️ Reset all</button>
       </div>
     </div>
-  </div>
-
-  <!-- Per‑store staff quick edit summary -->
-  <div class="staff-panel" id="staffSummaryPanel">
-    <div style="font-weight:600;">👥 Staff per outlet:</div>
-    <div class="staff-list-editor" id="staffListSummary"></div>
   </div>
 
   <div id="outletsContainer"></div>
@@ -88,7 +76,6 @@
 
 <script>
   // ==================== CONFIGURATION ====================
-  const APPS_SCRIPT_URL_INPUT = document.getElementById('scriptUrl');
   const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const OUTLETS = [
     { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00" } },
@@ -101,22 +88,17 @@
     queens: ["George Kumar", "Amy Chen", "Fiona Wong"]
   };
 
-  // State
-  let staffPerStore = {};     // { outletId: [staffNames] }
-  let assignments = {};       // key: "outletId|staffName|dayIdx" → "morning"/"afternoon"/""
+  let staffPerStore = {};
+  let assignments = {};
 
-  // Storage keys
   const STORAGE_STAFF = "timetable_staff_per_store";
   const STORAGE_ASSIGN = "timetable_assign_v3";
 
   function loadLocal() {
     const storedStaff = localStorage.getItem(STORAGE_STAFF);
-    if (storedStaff) staffPerStore = JSON.parse(storedStaff);
-    else staffPerStore = JSON.parse(JSON.stringify(DEFAULT_STAFF_PER_STORE));
-    
+    staffPerStore = storedStaff ? JSON.parse(storedStaff) : JSON.parse(JSON.stringify(DEFAULT_STAFF_PER_STORE));
     const storedAssign = localStorage.getItem(STORAGE_ASSIGN);
-    if (storedAssign) assignments = JSON.parse(storedAssign);
-    else assignments = {};
+    assignments = storedAssign ? JSON.parse(storedAssign) : {};
   }
   function saveLocal() {
     localStorage.setItem(STORAGE_STAFF, JSON.stringify(staffPerStore));
@@ -132,31 +114,7 @@
     renderAll();
   }
 
-  // ==================== PER‑STORE STAFF EDITORS ====================
-  function renderStaffSummary() {
-    const container = document.getElementById('staffListSummary');
-    container.innerHTML = '';
-    for (let outlet of OUTLETS) {
-      const staffList = staffPerStore[outlet.id] || [];
-      const div = document.createElement('div');
-      div.className = 'store-staff-card';
-      div.innerHTML = `
-        <h4>${outlet.name}</h4>
-        <input type="text" value="${staffList.join(', ')}" placeholder="Staff names" data-outlet="${outlet.id}" class="staff-summary-input">
-        <button class="edit-staff-btn small" data-outlet="${outlet.id}">✏️ Edit</button>
-      `;
-      container.appendChild(div);
-      const input = div.querySelector('.staff-summary-input');
-      input.addEventListener('change', (e) => {
-        const newList = e.target.value.split(',').map(s=>s.trim()).filter(s=>s);
-        staffPerStore[outlet.id] = newList;
-        saveLocal();
-        renderAll();
-      });
-      div.querySelector('.edit-staff-btn').addEventListener('click', () => openStaffModal(outlet.id));
-    }
-  }
-
+  // ==================== PER‑STORE STAFF MODAL ====================
   let currentEditingOutlet = null;
   function openStaffModal(outletId) {
     currentEditingOutlet = outletId;
@@ -175,12 +133,19 @@
     const raw = document.getElementById('modalStaffInput').value;
     const newList = raw.split(',').map(s=>s.trim()).filter(s=>s);
     staffPerStore[currentEditingOutlet] = newList;
+    // Remove assignments for staff no longer in the list
+    for (let key in assignments) {
+      const parts = key.split('|');
+      if (parts[0] === currentEditingOutlet && !newList.includes(parts[1])) {
+        delete assignments[key];
+      }
+    }
     saveLocal();
     renderAll();
     closeStaffModal();
   }
 
-  // ==================== RENDER TABLES (per‑store staff) ====================
+  // ==================== RENDER TABLES ====================
   function renderAll() {
     const container = document.getElementById('outletsContainer');
     container.innerHTML = '';
@@ -240,10 +205,9 @@
       card.appendChild(table);
       container.appendChild(card);
     }
-    renderStaffSummary(); // refresh quick edit panel
   }
 
-  // ==================== GOOGLE SHEETS SYNC (urlencoded + CORS) ====================
+  // ==================== GOOGLE SHEETS SYNC ====================
   async function callScript(action, data = {}) {
     const url = document.getElementById('scriptUrl').value.trim();
     if (!url) { alert("Please paste your Google Apps Script Web App URL."); return null; }
@@ -325,7 +289,6 @@
   document.getElementById('resetBtn').onclick = resetAll;
   document.getElementById('saveStaffModalBtn').onclick = saveStaffModal;
   document.getElementById('closeStaffModalBtn').onclick = closeStaffModal;
-  // close modal on background click
   document.getElementById('editStaffModal').addEventListener('click', (e) => { if(e.target === document.getElementById('editStaffModal')) closeStaffModal(); });
   
   const savedUrl = localStorage.getItem('timetable_script_url');
@@ -333,7 +296,7 @@
   document.getElementById('scriptUrl').addEventListener('change', () => localStorage.setItem('timetable_script_url', document.getElementById('scriptUrl').value));
 </script>
 
-<!-- Google Apps Script (must be deployed with CORS header) -->
+<!-- Google Apps Script Code – copy into your Sheet's Apps Script -->
 <!--
 function doPost(e) {
   const data = e.parameter;
