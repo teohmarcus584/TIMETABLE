@@ -3,20 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Auto‑Sync Timetable → Google Sheets</title>
+  <title>Staff Timetable | Google Sheets Sync (No CORS)</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
     .container { max-width: 1400px; margin: 0 auto; }
     .header { background: white; border-radius: 28px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     h1 { font-size: 1.7rem; margin: 0 0 6px; }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; align-items: center; justify-content: space-between; }
-    .staff-panel { background: #fff9e8; border: 1px solid #fde047; border-radius: 28px; padding: 16px 20px; margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
-    .staff-input-group { flex: 2; }
-    .staff-input-group input { width: 100%; padding: 10px 16px; border-radius: 60px; border: 1px solid #eab308; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; align-items: center; }
     button { background: white; border: 1px solid #cbd5e1; border-radius: 40px; padding: 8px 18px; cursor: pointer; transition: 0.2s; font-weight: 500; }
     button.primary { background: #3b82f6; border-color: #3b82f6; color: white; }
     button.google { background: #0f9d58; border-color: #0f9d58; color: white; }
+    button.danger { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
+    button:hover { transform: translateY(-1px); filter: brightness(0.97); }
+    .staff-panel { background: #fff9e8; border: 1px solid #fde047; border-radius: 28px; padding: 16px 20px; margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+    .staff-input-group { flex: 2; }
+    .staff-input-group input { width: 100%; padding: 10px 16px; border-radius: 60px; border: 1px solid #eab308; }
     .outlet-card { background: white; border-radius: 28px; margin-bottom: 32px; overflow-x: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .outlet-title { background: #f8fafc; padding: 16px 20px; border-bottom: 2px solid #e2edff; font-weight: 700; font-size: 1.3rem; }
     .hours { font-size: 0.8rem; color: #3b82f6; background: #eef2ff; display: inline-block; padding: 4px 12px; border-radius: 40px; margin-top: 8px; }
@@ -24,29 +26,24 @@
     .week-table th { background: #f1f5f9; padding: 12px 8px; font-size: 0.85rem; border-bottom: 1px solid #e2e8f0; }
     .week-table td { padding: 12px 8px; border-bottom: 1px solid #edf2f8; vertical-align: top; }
     .staff-name-cell { font-weight: 600; background: #fefce8; }
-    select { width: 100%; padding: 8px 6px; border-radius: 40px; border: 1px solid #cbd5e1; background: white; font-size: 0.8rem; cursor: pointer; }
+    select { width: 100%; padding: 8px 6px; border-radius: 40px; border: 1px solid #cbd5e1; background: white; font-size: 0.8rem; }
     .footer { background: #eef2ff; border-radius: 24px; padding: 12px; text-align: center; font-size: 0.8rem; margin-top: 20px; }
     .status-msg { font-size: 0.8rem; padding: 4px 12px; border-radius: 40px; background: #e8f5e9; color: #2c7a4b; }
-    .syncing { background: #fff3e0; color: #e67e22; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-    .url-input { width: 70%; font-family: monospace; border-radius: 40px; border: 1px solid #ccc; padding: 8px 12px; }
+    @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Auto‑Sync Timetable → Google Sheets</h1>
-    <div>Any dropdown change → instantly updates the sheet</div>
+    <h1>🗓️ Staff Timetable · 3 Malls</h1>
+    <div>Monday – Sunday | Morning & Afternoon shifts</div>
     <div class="toolbar">
-      <div>
-        <span id="syncStatus" class="status-msg">✅ Ready</span>
-      </div>
-      <div>
-        <button id="exportBtn" class="primary">💾 Export JSON</button>
-        <button id="importBtn">📂 Import JSON</button>
-        <input type="file" id="importFile" accept=".json" style="display:none">
-        <button id="resetBtn" style="background:#fee2e2;">⚠️ Reset all</button>
-      </div>
+      <button id="pushBtn" class="google">📤 Push to Google Sheet</button>
+      <button id="pullBtn" class="google">📥 Pull from Google Sheet</button>
+      <button id="exportBtn" class="primary">💾 Export JSON</button>
+      <button id="importBtn">📂 Import JSON</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+      <button id="resetBtn" class="danger">⚠️ Reset all</button>
     </div>
   </div>
 
@@ -56,21 +53,19 @@
       <input type="text" id="staffListInput" placeholder="e.g. Amy, Ben, Carla, David, Emma, Fiona, George">
     </div>
     <button id="updateStaffBtn">✅ Update Staff</button>
-    <div style="flex:1; text-align:right;">
-      <label style="font-size:0.8rem;">🔗 Google Script URL:</label>
-      <input type="text" id="scriptUrl" class="url-input" placeholder="https://script.google.com/macros/s/.../exec">
-    </div>
+    <span id="syncStatus" class="status-msg">💾 Local only</span>
   </div>
 
   <div id="outletsContainer"></div>
   <div class="footer">
-    📌 Every dropdown selection saves automatically to Google Sheet and local storage.<br>
-    Changes are synced immediately. No manual push/pull needed.
+    🔹 Google Sheets URL: <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec" style="width:60%; font-family:monospace; border-radius:40px; border:1px solid #ccc; padding:6px 12px;">
+    <br>📌 Every change saves automatically in browser. Use Push/Pull to sync with sheet.
   </div>
 </div>
 
 <script>
   // ==================== CONFIGURATION ====================
+  const APPS_SCRIPT_URL_INPUT = document.getElementById('scriptUrl');
   const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const OUTLETS = [
     { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00" } },
@@ -81,9 +76,8 @@
 
   let currentStaffList = [...DEFAULT_STAFF];
   let assignments = {}; // key: "outletId|staffName|dayIdx" → "morning"/"afternoon"/""
-  let pendingSync = new Set(); // track keys being synced to avoid duplicate calls
 
-  // Storage
+  // Storage keys
   const STORAGE_ASSIGN = "timetable_assign_v2";
   const STORAGE_STAFF = "timetable_staff_v2";
 
@@ -98,96 +92,103 @@
     localStorage.setItem(STORAGE_ASSIGN, JSON.stringify(assignments));
     localStorage.setItem(STORAGE_STAFF, JSON.stringify(currentStaffList));
   }
-
   function getKey(outletId, staff, dayIdx) { return `${outletId}|${staff}|${dayIdx}`; }
   function getAssignment(outletId, staff, dayIdx) { return assignments[getKey(outletId, staff, dayIdx)] || ""; }
-  
-  // Update local + save + sync to sheet
-  function setAssignment(outletId, staff, dayIdx, value, skipSync = false) {
+  function setAssignment(outletId, staff, dayIdx, value) {
     const key = getKey(outletId, staff, dayIdx);
     if (!value) delete assignments[key];
     else assignments[key] = value;
     saveLocal();
-    if (!skipSync) syncToSheet(outletId, staff, dayIdx, value);
+    renderAll();
   }
 
-  // ==================== GOOGLE SHEETS SYNC (single assignment update) ====================
-  async function syncToSheet(outletId, staff, dayIdx, shiftValue) {
+  // ==================== GOOGLE SHEETS SYNC (urlencoded) ====================
+  async function callScript(action, data = {}) {
     const url = document.getElementById('scriptUrl').value.trim();
-    if (!url) {
-      showStatus("⚠️ No script URL", true);
-      return;
-    }
-    const syncKey = `${outletId}|${staff}|${dayIdx}`;
-    if (pendingSync.has(syncKey)) return;
-    pendingSync.add(syncKey);
-    showStatus("🔄 Syncing...", false, true);
+    if (!url) { alert("Please paste your Google Apps Script Web App URL."); return null; }
+    const formData = new URLSearchParams();
+    formData.append('action', action);
+    for (let [k, v] of Object.entries(data)) formData.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
     try {
-      const formData = new URLSearchParams();
-      formData.append('action', 'updateAssignment');
-      formData.append('outletId', outletId);
-      formData.append('staff', staff);
-      formData.append('dayIdx', dayIdx);
-      formData.append('shift', shiftValue || "");
-      formData.append('staffList', JSON.stringify(currentStaffList));
-      formData.append('outlets', JSON.stringify(OUTLETS));
-      
       const res = await fetch(url, { method: 'POST', body: formData });
       const json = await res.json();
-      if (json.status === 'success') {
-        showStatus("✅ Synced", false, false);
-      } else {
-        throw new Error(json.error || 'Unknown error');
-      }
+      if (json.status === 'success') return json.data;
+      else throw new Error(json.error || 'Unknown error');
     } catch (err) {
-      console.error(err);
-      showStatus("❌ Sync failed", true);
-    } finally {
-      pendingSync.delete(syncKey);
-      setTimeout(() => { if (pendingSync.size === 0) showStatus("✅ Ready", false, false); }, 500);
+      alert(`Sync error: ${err.message}\nCheck URL and redeploy script with "Anyone" access.`);
+      return null;
     }
   }
 
-  async function pullFullData() {
-    const url = document.getElementById('scriptUrl').value.trim();
-    if (!url) { alert("Please set Google Script URL first."); return false; }
-    showStatus("📥 Loading from sheet...", false, true);
-    try {
-      const formData = new URLSearchParams();
-      formData.append('action', 'pull');
-      const res = await fetch(url, { method: 'POST', body: formData });
-      const json = await res.json();
-      if (json.status === 'success' && json.data) {
-        if (json.data.staffList && json.data.staffList.length) currentStaffList = json.data.staffList;
-        if (json.data.assignments) assignments = json.data.assignments;
+  async function pushToSheet() {
+    const data = {
+      staffList: currentStaffList,
+      assignments: assignments,
+      outlets: OUTLETS.map(o => ({ id: o.id, name: o.name, shiftTimes: o.shiftTimes }))
+    };
+    const result = await callScript('push', data);
+    if (result) alert("✅ Pushed to Google Sheet!");
+  }
+
+  async function pullFromSheet() {
+    const result = await callScript('pull');
+    if (result) {
+      if (result.staffList && result.staffList.length) currentStaffList = result.staffList;
+      if (result.assignments) assignments = result.assignments;
+      saveLocal();
+      document.getElementById('staffListInput').value = currentStaffList.join(', ');
+      renderAll();
+      alert("✅ Pulled from Google Sheet!");
+    }
+  }
+
+  // ==================== JSON EXPORT/IMPORT ====================
+  function exportJSON() {
+    const data = { staffList: currentStaffList, assignments };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
+    a.download = `timetable_${new Date().toISOString().slice(0,19)}.json`;
+    a.click();
+  }
+  function importJSON(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.staffList) currentStaffList = data.staffList;
+        if (data.assignments) assignments = data.assignments;
         saveLocal();
         document.getElementById('staffListInput').value = currentStaffList.join(', ');
         renderAll();
-        showStatus("✅ Loaded from sheet", false, false);
-        return true;
-      } else {
-        throw new Error(json.error || 'No data');
-      }
-    } catch (err) {
-      console.error(err);
-      showStatus("❌ Pull failed", true);
-      return false;
+        alert("Imported successfully!");
+      } catch(err) { alert("Invalid JSON"); }
+    };
+    reader.readAsText(file);
+  }
+
+  function resetAll() {
+    if (confirm("Delete all shifts and reset staff to default?")) {
+      assignments = {};
+      currentStaffList = [...DEFAULT_STAFF];
+      saveLocal();
+      document.getElementById('staffListInput').value = currentStaffList.join(', ');
+      renderAll();
     }
   }
 
-  // ==================== UI HELPERS ====================
-  let statusTimeout;
-  function showStatus(msg, isError = false, isLong = false) {
-    const el = document.getElementById('syncStatus');
-    el.textContent = msg;
-    el.classList.remove('syncing');
-    if (isError) el.style.background = '#fee2e2';
-    else if (msg.includes('Syncing')) { el.classList.add('syncing'); el.style.background = '#fff3e0'; }
-    else { el.style.background = '#e8f5e9'; el.classList.remove('syncing'); }
-    if (statusTimeout) clearTimeout(statusTimeout);
-    if (!isLong) statusTimeout = setTimeout(() => {
-      if (el.textContent === msg) { el.textContent = "✅ Ready"; el.style.background = '#e8f5e9'; el.classList.remove('syncing'); }
-    }, 3000);
+  function updateStaff() {
+    let raw = document.getElementById('staffListInput').value;
+    let names = raw.split(',').map(s=>s.trim()).filter(s=>s);
+    if (names.length < 2) { alert("At least 2 staff needed."); return; }
+    const unique = [...new Set(names)];
+    // remove assignments for staff no longer present
+    for (let key in assignments) {
+      let staff = key.split('|')[1];
+      if (!unique.includes(staff)) delete assignments[key];
+    }
+    currentStaffList = unique;
+    saveLocal();
+    renderAll();
   }
 
   // ==================== RENDER TABLES ====================
@@ -226,19 +227,7 @@
           const offOpt = document.createElement('option'); offOpt.value = ""; offOpt.textContent = "— Off —"; if (current === "") offOpt.selected = true; select.appendChild(offOpt);
           const mornOpt = document.createElement('option'); mornOpt.value = "morning"; mornOpt.textContent = `🌅 Morning (${outlet.shiftTimes.morning})`; if (current === "morning") mornOpt.selected = true; select.appendChild(mornOpt);
           const aftOpt = document.createElement('option'); aftOpt.value = "afternoon"; aftOpt.textContent = `🌙 Afternoon (${outlet.shiftTimes.afternoon})`; if (current === "afternoon") aftOpt.selected = true; select.appendChild(aftOpt);
-          select.addEventListener('change', ((o, s, d) => {
-            return async () => {
-              const newVal = select.value;
-              // Update local instantly for responsiveness
-              const key = getKey(o.id, s, d);
-              if (!newVal) delete assignments[key];
-              else assignments[key] = newVal;
-              saveLocal();
-              renderAll(); // re-render to reflect change (keeps dropdowns consistent)
-              // Then sync to sheet (async, no blocking)
-              syncToSheet(o.id, s, d, newVal);
-            };
-          })(outlet, staff, dayIdx));
+          select.addEventListener('change', ((o, s, d) => () => setAssignment(o.id, s, d, select.value))(outlet, staff, dayIdx));
           cell.appendChild(select);
           row.appendChild(cell);
         }
@@ -250,211 +239,81 @@
     }
   }
 
-  function updateStaff() {
-    let raw = document.getElementById('staffListInput').value;
-    let names = raw.split(',').map(s=>s.trim()).filter(s=>s);
-    if (names.length < 2) { alert("At least 2 staff needed."); return; }
-    const unique = [...new Set(names)];
-    // remove assignments for staff no longer present
-    for (let key in assignments) {
-      let staff = key.split('|')[1];
-      if (!unique.includes(staff)) delete assignments[key];
-    }
-    currentStaffList = unique;
-    saveLocal();
-    // Also push full staff list to sheet (optional)
-    const url = document.getElementById('scriptUrl').value.trim();
-    if (url) {
-      const formData = new URLSearchParams();
-      formData.append('action', 'pushStaffOnly');
-      formData.append('staffList', JSON.stringify(currentStaffList));
-      fetch(url, { method: 'POST', body: formData }).catch(console.error);
-    }
-    renderAll();
-  }
-
-  function exportJSON() {
-    const data = { staffList: currentStaffList, assignments };
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
-    a.download = `timetable_${new Date().toISOString().slice(0,19)}.json`;
-    a.click();
-  }
-  function importJSON(file) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const data = JSON.parse(e.target.result);
-        if (data.staffList) currentStaffList = data.staffList;
-        if (data.assignments) assignments = data.assignments;
-        saveLocal();
-        document.getElementById('staffListInput').value = currentStaffList.join(', ');
-        renderAll();
-        alert("Imported successfully!");
-        // Optionally push to sheet
-        const url = document.getElementById('scriptUrl').value.trim();
-        if (url) {
-          const formData = new URLSearchParams();
-          formData.append('action', 'pushFull');
-          formData.append('staffList', JSON.stringify(currentStaffList));
-          formData.append('assignments', JSON.stringify(assignments));
-          fetch(url, { method: 'POST', body: formData }).catch(console.error);
-        }
-      } catch(err) { alert("Invalid JSON"); }
-    };
-    reader.readAsText(file);
-  }
-
-  function resetAll() {
-    if (confirm("Delete all shifts and reset staff to default?")) {
-      assignments = {};
-      currentStaffList = [...DEFAULT_STAFF];
-      saveLocal();
-      document.getElementById('staffListInput').value = currentStaffList.join(', ');
-      renderAll();
-      const url = document.getElementById('scriptUrl').value.trim();
-      if (url) {
-        const formData = new URLSearchParams();
-        formData.append('action', 'pushFull');
-        formData.append('staffList', JSON.stringify(currentStaffList));
-        formData.append('assignments', JSON.stringify(assignments));
-        fetch(url, { method: 'POST', body: formData }).catch(console.error);
-      }
-    }
-  }
-
   // ==================== INIT ====================
   loadLocal();
   renderAll();
-  
-  document.getElementById('updateStaffBtn').onclick = updateStaff;
+  document.getElementById('pushBtn').onclick = pushToSheet;
+  document.getElementById('pullBtn').onclick = pullFromSheet;
   document.getElementById('exportBtn').onclick = exportJSON;
   document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
   document.getElementById('importFile').onchange = e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; };
   document.getElementById('resetBtn').onclick = resetAll;
+  document.getElementById('updateStaffBtn').onclick = updateStaff;
 
-  // Auto-pull from sheet if URL is saved
+  // Try to load stored script URL
   const savedUrl = localStorage.getItem('timetable_script_url');
-  if (savedUrl) {
-    document.getElementById('scriptUrl').value = savedUrl;
-    setTimeout(() => pullFullData(), 500);
-  }
-  document.getElementById('scriptUrl').addEventListener('change', () => {
-    const newUrl = document.getElementById('scriptUrl').value;
-    localStorage.setItem('timetable_script_url', newUrl);
-    if (newUrl) pullFullData();
-  });
+  if (savedUrl) document.getElementById('scriptUrl').value = savedUrl;
+  document.getElementById('scriptUrl').addEventListener('change', () => localStorage.setItem('timetable_script_url', document.getElementById('scriptUrl').value));
 </script>
 
-<!-- ==================== UPDATED APPS SCRIPT CODE ==================== -->
+<!-- Google Apps Script Code – copy into your Sheet's Apps Script -->
 <!--
-Copy this into your Google Apps Script editor, then Deploy as Web App (Anyone access).
-
 function doPost(e) {
   const data = e.parameter;
   const action = data.action;
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   
-  try {
-    if (action === "updateAssignment") {
-      // Update single assignment (append or overwrite)
-      const outletId = data.outletId;
-      const staff = data.staff;
-      const dayIdx = parseInt(data.dayIdx);
-      const shift = data.shift;
-      const staffList = JSON.parse(data.staffList);
-      const outlets = JSON.parse(data.outlets);
-      const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-      
-      // Clear existing rows for this combination and re-insert all (simple but safe)
-      // Alternatively, we can update only the matching row – but full rewrite is fine for small data.
-      sheet.clear();
-      const headers = ["OutletId","OutletName","StaffName","Day","DayIndex","ShiftAssigned","ShiftTimeRange"];
-      sheet.getRange(1,1,1,headers.length).setValues([headers]);
-      const rows = [];
-      for (let outlet of outlets) {
-        for (let s of staffList) {
-          for (let d=0; d<days.length; d++) {
-            const key = `${outlet.id}|${s}|${d}`;
-            let shiftVal = "";
-            let shiftRange = "Off";
-            if (s === staff && d === dayIdx && outlet.id === outletId) {
-              shiftVal = shift;
-              if (shift === "morning") shiftRange = outlet.shiftTimes.morning;
-              else if (shift === "afternoon") shiftRange = outlet.shiftTimes.afternoon;
-            } else {
-              // read from the incoming full assignment map? We don't have it. So we must receive the full state.
-              // Better to send full state with each update. Let's change the client to send full assignments on every change.
-              // But to keep simple, we'll just rewrite using the current assignments from client.
-            }
-            rows.push([outlet.id, outlet.name, s, days[d], d, shiftVal, shiftRange]);
-          }
+  if (action === "push") {
+    const staffList = JSON.parse(data.staffList);
+    const assignments = JSON.parse(data.assignments);
+    const outlets = JSON.parse(data.outlets);
+    
+    sheet.clear();
+    const headers = ["OutletId","OutletName","StaffName","Day","DayIndex","ShiftAssigned","ShiftTimeRange"];
+    sheet.getRange(1,1,1,headers.length).setValues([headers]);
+    const rows = [];
+    const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    for (let outlet of outlets) {
+      for (let staff of staffList) {
+        for (let d=0; d<days.length; d++) {
+          const key = `${outlet.id}|${staff}|${d}`;
+          const shift = assignments[key] || "";
+          let range = "";
+          if (shift === "morning") range = outlet.shiftTimes.morning;
+          else if (shift === "afternoon") range = outlet.shiftTimes.afternoon;
+          else range = "Off";
+          rows.push([outlet.id, outlet.name, staff, days[d], d, shift, range]);
         }
       }
-      if (rows.length) sheet.getRange(2,1,rows.length,headers.length).setValues(rows);
-      return respond({status:"success"});
     }
-    else if (action === "pushFull") {
-      const staffList = JSON.parse(data.staffList);
-      const assignments = JSON.parse(data.assignments);
-      const outlets = JSON.parse(data.outlets);
-      const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-      sheet.clear();
-      const headers = ["OutletId","OutletName","StaffName","Day","DayIndex","ShiftAssigned","ShiftTimeRange"];
-      sheet.getRange(1,1,1,headers.length).setValues([headers]);
-      const rows = [];
-      for (let outlet of outlets) {
-        for (let staff of staffList) {
-          for (let d=0; d<days.length; d++) {
-            const key = `${outlet.id}|${staff}|${d}`;
-            const shift = assignments[key] || "";
-            let range = "";
-            if (shift === "morning") range = outlet.shiftTimes.morning;
-            else if (shift === "afternoon") range = outlet.shiftTimes.afternoon;
-            else range = "Off";
-            rows.push([outlet.id, outlet.name, staff, days[d], d, shift, range]);
-          }
-        }
-      }
-      if (rows.length) sheet.getRange(2,1,rows.length,headers.length).setValues(rows);
-      return respond({status:"success"});
-    }
-    else if (action === "pushStaffOnly") {
-      // Only update staff list, keep assignments? Not implemented; just store staff in a separate sheet.
-      // For simplicity, we'll ignore.
-      return respond({status:"success"});
-    }
-    else if (action === "pull") {
-      const lastRow = sheet.getLastRow();
-      if (lastRow < 2) return respond({status:"success", data:{staffList:[],assignments:{}}});
-      const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
-      const assignmentsMap = {};
-      const staffSet = new Set();
-      for (let row of rows) {
-        const outletId = row[0];
-        const staff = row[2];
-        const dayIdx = row[4];
-        const shift = row[5];
-        if (shift && shift !== "") {
-          const key = `${outletId}|${staff}|${dayIdx}`;
-          assignmentsMap[key] = shift;
-          staffSet.add(staff);
-        }
-      }
-      return respond({status:"success", data:{staffList:Array.from(staffSet), assignments:assignmentsMap}});
-    }
-    else {
-      return respond({status:"error", error:"Invalid action"});
-    }
-  } catch(err) {
-    return respond({status:"error", error:err.toString()});
+    if (rows.length) sheet.getRange(2,1,rows.length,headers.length).setValues(rows);
+    return ContentService.createTextOutput(JSON.stringify({status:"success"}))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-}
-
-function respond(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader("Access-Control-Allow-Origin", "*");
+  else if (action === "pull") {
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return ContentService.createTextOutput(JSON.stringify({status:"success", data:{staffList:[],assignments:{}}}))
+      .setMimeType(ContentService.MimeType.JSON);
+    const rows = sheet.getRange(2,1,lastRow-1,7).getValues();
+    const assignmentsMap = {};
+    const staffSet = new Set();
+    for (let row of rows) {
+      const outletId = row[0];
+      const staff = row[2];
+      const dayIdx = row[4];
+      const shift = row[5];
+      if (shift && shift !== "") {
+        const key = `${outletId}|${staff}|${dayIdx}`;
+        assignmentsMap[key] = shift;
+        staffSet.add(staff);
+      }
+    }
+    const staffList = Array.from(staffSet);
+    return ContentService.createTextOutput(JSON.stringify({status:"success", data:{staffList, assignments:assignmentsMap}}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput(JSON.stringify({status:"error",error:"Invalid action"}))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 -->
 </body>
