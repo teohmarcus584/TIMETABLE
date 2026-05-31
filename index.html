@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Print to PDF</title>
+  <title>Weekly Timetable | Clean PDF Export</title>
   <style>
-    /* Base styles (same as before) */
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
     .container { max-width: 1400px; margin: 0 auto; }
@@ -39,23 +38,59 @@
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
 
-    /* Print styles – for PDF export */
-    @media print {
-      body { background: white; padding: 0; margin: 0; }
-      .toolbar, .week-selector, .footer, .edit-staff-btn, .modal, .header button, .header .toolbar, .header .week-selector { display: none !important; }
-      .outlet-card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; page-break-inside: avoid; }
-      .week-table th, .week-table td { border: 1px solid #ccc; }
-      select { -webkit-appearance: none; appearance: none; border: none; background: transparent; font-weight: normal; }
-      .staff-name-cell { background: #f0f0f0; }
-      .header { background: none; box-shadow: none; padding: 10px 0; }
-      h1 { font-size: 1.5rem; }
+    /* Styles for the clean PDF clone – no buttons, no dropdowns, compact */
+    .pdf-timetable {
+      font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
+      padding: 20px;
+      background: white;
+    }
+    .pdf-timetable .outlet-card {
+      box-shadow: none;
+      border: 1px solid #ddd;
+      margin-bottom: 20px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .pdf-timetable .outlet-title {
+      background: #f0f0f0;
+      border-bottom: 1px solid #ccc;
+    }
+    .pdf-timetable .week-table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .pdf-timetable .week-table th,
+    .pdf-timetable .week-table td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .pdf-timetable .week-table th {
+      background: #eaeef2;
+      font-weight: bold;
+    }
+    .pdf-timetable .staff-name-cell {
+      background: #f9f9f9;
+      font-weight: 600;
+    }
+    .pdf-timetable .edit-staff-btn,
+    .pdf-timetable button,
+    .pdf-timetable select,
+    .pdf-timetable .footer,
+    .pdf-timetable .toolbar {
+      display: none !important;
+    }
+    .pdf-timetable .shift-text {
+      font-weight: normal;
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Morning / Afternoon / Full Shift</h1>
+    <h1>🗓️ Staff Timetable · Clean PDF Export</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -65,7 +100,7 @@
     <div class="toolbar">
       <div>
         <button id="pullBtn" class="google">📥 Pull from Google Sheet</button>
-        <button id="pdfBtn" class="pdf">📄 Generate PDF</button>
+        <button id="pdfBtn" class="pdf">📄 Download PDF (Clean)</button>
       </div>
       <div>
         <button id="pushBtn" class="google">📤 Push to Google Sheet</button>
@@ -80,7 +115,7 @@
   <div id="outletsContainer"></div>
   <div class="footer">
     📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.<br>
-    🖨️ Click "Generate PDF" to save the current timetable as a PDF document.
+    🖨️ Click "Download PDF (Clean)" to export a neat, single‑page timetable without UI elements.
   </div>
 </div>
 
@@ -350,13 +385,76 @@
     }
   }
 
-  // PDF generation: just trigger print with custom title
-  function generatePDF() {
-    // Save original title
-    const originalTitle = document.title;
-    document.title = `Timetable_${currentWeekStart}`;
-    window.print();
-    document.title = originalTitle;
+  // ==================== CLEAN PDF GENERATION ====================
+  async function downloadCleanPDF() {
+    // 1. Clone the entire timetable container
+    const originalContainer = document.getElementById('outletsContainer');
+    if (!originalContainer || originalContainer.children.length === 0) {
+      alert("No timetable data to export.");
+      return;
+    }
+
+    // Create a deep clone
+    const clone = originalContainer.cloneNode(true);
+    
+    // 2. Remove all edit buttons and other interactive elements from clone
+    const editButtons = clone.querySelectorAll('.edit-staff-btn');
+    editButtons.forEach(btn => btn.remove());
+    
+    // 3. Replace all <select> elements with the selected option's text
+    const selects = clone.querySelectorAll('select');
+    selects.forEach(select => {
+      const selectedOption = select.options[select.selectedIndex];
+      const text = selectedOption ? selectedOption.textContent : "— Off —";
+      const span = document.createElement('span');
+      span.className = 'shift-text';
+      span.textContent = text;
+      select.parentNode.replaceChild(span, select);
+    });
+    
+    // 4. Remove the extra info row (the one with morning/afternoon/full times) – optional but cleaner
+    const extraInfoDivs = clone.querySelectorAll('.outlet-title + div');
+    extraInfoDivs.forEach(div => {
+      if (div.style.fontSize === '0.7rem') div.remove();
+    });
+    
+    // 5. Wrap the clone in a container with PDF-specific styles
+    const pdfContainer = document.createElement('div');
+    pdfContainer.className = 'pdf-timetable';
+    pdfContainer.appendChild(clone);
+    
+    // 6. Add a title and week range at the top
+    const title = document.createElement('h2');
+    title.textContent = `Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}`;
+    title.style.textAlign = 'center';
+    title.style.marginBottom = '20px';
+    pdfContainer.insertBefore(title, pdfContainer.firstChild);
+    
+    // 7. Temporarily append to body, generate PDF, then remove
+    document.body.appendChild(pdfContainer);
+    
+    const pdfBtn = document.getElementById('pdfBtn');
+    const originalText = pdfBtn.innerText;
+    pdfBtn.innerText = "⏳ Generating PDF...";
+    pdfBtn.disabled = true;
+    
+    try {
+      const opt = {
+        margin:        [0.5, 0.5, 0.5, 0.5],
+        filename:     `Timetable_${currentWeekStart}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, letterRendering: true, useCORS: true, logging: false },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+      };
+      await html2pdf().set(opt).from(pdfContainer).save();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      pdfBtn.innerText = originalText;
+      pdfBtn.disabled = false;
+      document.body.removeChild(pdfContainer);
+    }
   }
 
   function exportJSON() {
@@ -400,7 +498,7 @@
 
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
   document.getElementById('pullBtn').onclick = pullFromSheet;
-  document.getElementById('pdfBtn').onclick = generatePDF;
+  document.getElementById('pdfBtn').onclick = downloadCleanPDF;
   document.getElementById('pushBtn').onclick = pushToSheet;
   document.getElementById('exportBtn').onclick = exportJSON;
   document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
