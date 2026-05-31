@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Morning / Afternoon / Full Shift</title>
+  <title>Weekly Timetable | No CORS (JSONP)</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -35,18 +35,18 @@
     .modal-content h3 { margin-top: 0; }
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
-    @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } .week-selector { flex-direction: column; align-items: stretch; } }
+    @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Morning / Afternoon / Full Shift</h1>
+    <h1>🗓️ Staff Timetable · No CORS (JSONP)</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
       <input type="date" id="weekStartPicker" value="">
-      <button id="generateBtn" class="primary" style="background:#3b82f6; color:white;">🔄 Generate Timetable</button>
+      <button id="generateBtn" class="primary">🔄 Generate Timetable</button>
       <span id="weekRangeDisplay" style="font-size:0.9rem; color:#475569;"></span>
     </div>
     <div class="toolbar">
@@ -66,7 +66,7 @@
   <div id="outletsContainer"></div>
   <div class="footer">
     📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.<br>
-    🔄 Click "Generate Timetable" to load the schedule for the selected week from Google Sheets.
+    🔄 Using JSONP – no CORS errors.
   </div>
 </div>
 
@@ -84,24 +84,15 @@
 </div>
 
 <script>
-  // ==================== 🔴 PASTE YOUR GOOGLE SCRIPT URL HERE ====================
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2XMfPzyWdVD1uEvn7um13uhjT5S91r1L_1TVaLNljHVULiuFxb6TLyAtiP_NYoKzWpQ/exec';
-  // ============================================================================
+  // ==================== YOUR SCRIPT URL ====================
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySlVVBl8kFStvQA4Wb2DZovIXkEw6YGiCXfz54_iyR0ZbL63izjiJ5dtls4IFQq6nNUw/exec';
+  // ========================================================
 
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const OUTLETS = [
-    { 
-      id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00",
-      shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" }
-    },
-    { 
-      id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:30",
-      shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:30", full: "10:00 – 22:30" }
-    },
-    { 
-      id: "queens", name: "🛍️ Queens Mall", hours: "10:30 – 22:30",
-      shiftTimes: { morning: "10:30 – 16:00", afternoon: "16:30 – 22:30", full: "10:30 – 22:30" }
-    }
+    { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
+    { id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:30", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:30", full: "10:00 – 22:30" } },
+    { id: "queens", name: "🛍️ Queens Mall", hours: "10:30 – 22:30", shiftTimes: { morning: "10:30 – 16:00", afternoon: "16:30 – 22:30", full: "10:30 – 22:30" } }
   ];
   const DEFAULT_STAFF_PER_STORE = {
     gurney: ["Amy Chen", "Ben Lee", "Carla Raj"],
@@ -281,22 +272,44 @@
     renderAll();
   }
 
-  // ==================== GOOGLE SHEETS SYNC ====================
+  // ==================== JSONP HELPERS ====================
+  function jsonpRequest(params, callbackName) {
+    return new Promise((resolve, reject) => {
+      const callback = callbackName || 'jsonp_callback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      const url = new URL(SCRIPT_URL);
+      for (let [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null) url.searchParams.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
+      }
+      url.searchParams.append('callback', callback);
+      
+      window[callback] = function(data) {
+        delete window[callback];
+        document.body.removeChild(script);
+        if (data.status === 'success') resolve(data.data);
+        else reject(new Error(data.error || 'Unknown error'));
+      };
+      
+      const script = document.createElement('script');
+      script.src = url.toString();
+      script.onerror = function() {
+        delete window[callback];
+        document.body.removeChild(script);
+        reject(new Error('JSONP request failed'));
+      };
+      document.body.appendChild(script);
+    });
+  }
+
   async function callScript(action, data = {}) {
     if (!SCRIPT_URL) {
-      alert("Google Sheets URL is not set. Please edit the HTML and add your script URL to the 'SCRIPT_URL' constant.");
+      alert("Google Sheets URL is not set.");
       return null;
     }
-    const formData = new URLSearchParams();
-    formData.append('action', action);
-    for (let [k, v] of Object.entries(data)) formData.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
     try {
-      const res = await fetch(SCRIPT_URL, { method: 'POST', body: formData });
-      const json = await res.json();
-      if (json.status === 'success') return json.data;
-      else throw new Error(json.error || 'Unknown error');
+      const params = { action, ...data };
+      return await jsonpRequest(params);
     } catch (err) {
-      alert(`Sync error: ${err.message}\nCheck URL and redeploy script with "Anyone" access.`);
+      alert(`Sync error: ${err.message}\nCheck URL and script deployment.`);
       return null;
     }
   }
@@ -323,7 +336,6 @@
     }
   }
 
-  // Generate timetable = pull from sheet + refresh
   async function generateTimetable() {
     await pullFromSheet();
   }
