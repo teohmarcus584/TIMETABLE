@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Auto‑Pull + Submit</title>
+  <title>Weekly Timetable | Monday First</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -46,20 +46,20 @@
     .pdf-timetable .week-table th { background: #eaeef2; font-weight: bold; }
     .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
-    .hidden { display: none !important; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Auto‑Pairing (Full ↔ Off)</h1>
-    <div>Select week → each column shows day + date</div>
+    <h1>🗓️ Staff Timetable · Monday First</h1>
+    <div>Select any date → automatically shows the week starting on Monday</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
       <input type="date" id="weekStartPicker" value="">
+      <button id="resetWeekBtn" class="small">⟳ Reset to Coming Monday</button>
       <span id="weekRangeDisplay" style="font-size:0.9rem; color:#475569;"></span>
-      <span id="loadStatus" class="status-badge">⏳ Loading from sheet...</span>
+      <span id="loadStatus" class="status-badge">⏳ Loading...</span>
     </div>
     <div class="toolbar">
       <div>
@@ -67,7 +67,7 @@
         <button id="pdfBtn" class="pdf">📄 Download PDF</button>
       </div>
       <div>
-        <button id="resetBtn" class="danger">⚠️ Reset all</button>
+        <button id="resetBtn" class="danger">⚠️ Reset all data</button>
       </div>
     </div>
   </div>
@@ -77,7 +77,8 @@
     📌 Each outlet has its own staff list. Click "Edit Staff" or "Flexible" on any outlet.<br>
     🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Afternoon → previous staff gets Morning; Full Day → next staff gets Off; Off → next staff gets Full Day.<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes – full manual control.<br>
-    🚀 <strong>Auto‑pull</strong>: when you change the week, it loads data from Google Sheets automatically.
+    🚀 <strong>Auto‑pull</strong>: when you change the week, it loads data from Google Sheets automatically.<br>
+    📅 <strong>Week always starts on Monday</strong> (Mon → Tue → Wed → Thu → Fri → Sat → Sun).
   </div>
 </div>
 
@@ -99,6 +100,7 @@
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzp8nkgSQiB2cuCEoC_FjxESlQYAmiFKr_Ua0MVn4HKqBzA-UAoC96smtYlr0SsFSA6zQ/exec'; // ⚠️ REPLACE WITH YOUR URL
   // ========================================================
 
+  // Day order: Monday first, Sunday last
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const OUTLETS = [
     { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
@@ -134,26 +136,32 @@
     localStorage.setItem(STORAGE_FLEX, JSON.stringify(flexibleMode));
   }
 
+  // Get Monday of any given date (using UTC to avoid timezone shifts)
   function getMonday(date) {
-    const d = new Date(date);
-    const day = d.getDay();
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const day = d.getUTCDay(); // 0=Sunday, 1=Monday...6=Saturday
     const diff = (day === 0 ? 6 : day - 1);
-    d.setDate(d.getDate() - diff);
-    d.setHours(0,0,0,0);
+    d.setUTCDate(d.getUTCDate() - diff);
+    d.setUTCHours(0,0,0,0);
     return d;
   }
 
+  // Get the next Monday after today (coming Monday)
   function getNextMonday(date) {
-    const d = new Date(date);
-    const day = d.getDay();
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const day = d.getUTCDay();
     const daysToAdd = (day === 1 ? 7 : (8 - day) % 7);
-    d.setDate(d.getDate() + daysToAdd);
-    d.setHours(0,0,0,0);
+    d.setUTCDate(d.getUTCDate() + daysToAdd);
+    d.setUTCHours(0,0,0,0);
     return d;
   }
 
-  function formatDate(date) { return date.toISOString().split('T')[0]; }
-  function formatDateShort(date) { return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+  function formatDate(date) {
+    return date.toISOString().split('T')[0];
+  }
+  function formatDateShort(date) {
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
 
   function getKey(weekStart, outletId, staff, dayIdx) { return `${weekStart}|${outletId}|${staff}|${dayIdx}`; }
   function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
@@ -247,7 +255,7 @@
     const dates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(mondayDate);
-      d.setDate(mondayDate.getDate() + i);
+      d.setUTCDate(mondayDate.getUTCDate() + i);
       dates.push(d);
     }
     return dates;
@@ -258,7 +266,8 @@
     const container = document.getElementById('outletsContainer');
     container.innerHTML = '';
     const weekDates = getWeekDates(new Date(currentWeekStart));
-    const headerLabels = weekDates.map(d => `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]}, ${formatDateShort(d)}`);
+    // FIXED: use DAY_NAMES array directly (Monday first) and map to each date in order
+    const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
 
     for (let outlet of OUTLETS) {
       const staffList = staffPerStore[outlet.id] || [];
@@ -328,20 +337,31 @@
     }
     const startDate = new Date(currentWeekStart);
     const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
+    endDate.setUTCDate(startDate.getUTCDate() + 6);
     document.getElementById('weekRangeDisplay').innerText = `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
   }
 
+  // When the date picker changes, force the value to the Monday of that week
   function setWeekFromPicker() {
-    let pickerVal = document.getElementById('weekStartPicker').value;
-    if (!pickerVal) {
-      const comingMonday = getNextMonday(new Date());
-      pickerVal = formatDate(comingMonday);
-      document.getElementById('weekStartPicker').value = pickerVal;
-    }
-    currentWeekStart = pickerVal;
+    let pickerDate = document.getElementById('weekStartPicker').value;
+    if (!pickerDate) return;
+    const selectedDate = new Date(pickerDate);
+    const monday = getMonday(selectedDate);
+    const mondayStr = formatDate(monday);
+    // Update picker to show the Monday
+    document.getElementById('weekStartPicker').value = mondayStr;
+    currentWeekStart = mondayStr;
     renderAll();
-    // Auto‑pull when date changes
+    pullFromSheet(true);
+  }
+
+  // Reset to the coming Monday (next Monday from today)
+  function resetToComingMonday() {
+    const comingMonday = getNextMonday(new Date());
+    const mondayStr = formatDate(comingMonday);
+    document.getElementById('weekStartPicker').value = mondayStr;
+    currentWeekStart = mondayStr;
+    renderAll();
     pullFromSheet(true);
   }
 
@@ -447,7 +467,7 @@
   // ==================== PDF GENERATION ====================
   function buildPDFHTML() {
     const weekDates = getWeekDates(new Date(currentWeekStart));
-    const headerLabels = weekDates.map(d => `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]}, ${formatDateShort(d)}`);
+    const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
     let html = `<div class="pdf-timetable">
       <h2 style="text-align:center;">Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
     for (let outlet of OUTLETS) {
@@ -470,7 +490,7 @@
         }
         html += `</tr>`;
       }
-      html += `</tbody></tr></div>`;
+      html += `</tbody></table></div>`;
     }
     html += `</div>`;
     return html;
@@ -481,7 +501,6 @@
     const originalText = pdfBtn.innerText;
     pdfBtn.innerText = "⏳ Loading data...";
     pdfBtn.disabled = true;
-    // Refresh data from sheet before generating PDF
     await pullFromSheet(false);
     pdfBtn.innerText = "⏳ Generating PDF...";
     const pdfHTML = buildPDFHTML();
@@ -496,7 +515,7 @@
   }
 
   function resetAll() {
-    if (confirm("Reset all data?")) {
+    if (confirm("Reset all data (staff lists, shifts, flexible mode)?")) {
       staffPerStore = JSON.parse(JSON.stringify(DEFAULT_STAFF_PER_STORE));
       assignments = {};
       flexibleMode = {};
@@ -509,13 +528,15 @@
   async function init() {
     loadLocal();
     const comingMonday = getNextMonday(new Date());
-    document.getElementById('weekStartPicker').value = formatDate(comingMonday);
-    currentWeekStart = formatDate(comingMonday);
+    const defaultDate = formatDate(comingMonday);
+    document.getElementById('weekStartPicker').value = defaultDate;
+    currentWeekStart = defaultDate;
     renderAll();
-    await pullFromSheet(false); // silent auto‑pull on page load
+    await pullFromSheet(false);
   }
 
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
+  document.getElementById('resetWeekBtn').addEventListener('click', resetToComingMonday);
   document.getElementById('pushBtn').onclick = pushToSheet;
   document.getElementById('pdfBtn').onclick = downloadCleanPDF;
   document.getElementById('resetBtn').onclick = resetAll;
