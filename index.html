@@ -129,11 +129,14 @@
   // ========================================================
 
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  
+  // Updated Sunshine Central hours: now 10:00 – 22:00 (morning 10-4, afternoon 4-10)
   const OUTLETS = [
     { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
-    { id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:30", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:30", full: "10:00 – 22:30" } },
+    { id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
     { id: "queens", name: "🛍️ Queens Mall", hours: "10:30 – 22:30", shiftTimes: { morning: "10:30 – 16:00", afternoon: "16:30 – 22:30", full: "10:30 – 22:30" } }
   ];
+  
   const DEFAULT_STAFF_PER_STORE = {
     gurney: ["Amy Chen", "Ben Lee", "Carla Raj"],
     sunshine: ["David Lim", "Emma Tan", "Fiona Wong"],
@@ -158,6 +161,7 @@
     localStorage.setItem(STORAGE_ASSIGN, JSON.stringify(assignments));
   }
 
+  // Get Monday of a given date (set to start of day)
   function getMonday(date) {
     const d = new Date(date);
     const day = d.getDay();
@@ -166,6 +170,18 @@
     d.setHours(0,0,0,0);
     return d;
   }
+
+  // Get the next Monday after today (coming Monday)
+  function getNextMonday(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    // days until next Monday: (8 - day) % 7; if day=1 (Monday) gives 7, so next Monday
+    const daysToAdd = (day === 1 ? 7 : (8 - day) % 7);
+    d.setDate(d.getDate() + daysToAdd);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+
   function formatDate(date) {
     return date.toISOString().split('T')[0];
   }
@@ -304,9 +320,9 @@
   function setWeekFromPicker() {
     let pickerVal = document.getElementById('weekStartPicker').value;
     if (!pickerVal) {
-      const today = new Date();
-      const monday = getMonday(today);
-      pickerVal = formatDate(monday);
+      // Fallback to coming Monday
+      const comingMonday = getNextMonday(new Date());
+      pickerVal = formatDate(comingMonday);
       document.getElementById('weekStartPicker').value = pickerVal;
     }
     currentWeekStart = pickerVal;
@@ -397,7 +413,7 @@
       for (let label of headerLabels) {
         html += `<th>${label}</th>`;
       }
-      html += `</tr></thead><tbody>`;
+      html += `</thead><tbody>`;
       
       for (let staff of staffList) {
         html += `<tr><td class="staff-name-cell">${staff}</td>`;
@@ -493,10 +509,11 @@
 
   // ==================== INIT ====================
   loadLocal();
-  const today = new Date();
-  const defaultMonday = getMonday(today);
-  document.getElementById('weekStartPicker').value = formatDate(defaultMonday);
-  currentWeekStart = formatDate(defaultMonday);
+  // Set initial date to the coming Monday (next Monday from today)
+  const comingMonday = getNextMonday(new Date());
+  const defaultMondayStr = formatDate(comingMonday);
+  document.getElementById('weekStartPicker').value = defaultMondayStr;
+  currentWeekStart = defaultMondayStr;
   renderAll();
 
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
