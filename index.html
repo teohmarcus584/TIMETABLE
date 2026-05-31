@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Monday First</title>
+  <title>Weekly Timetable | One‑Page PDF</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -38,13 +38,55 @@
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
-    .pdf-timetable { font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; padding: 20px; background: white; }
-    .pdf-timetable .outlet-card { border: 1px solid #ddd; margin-bottom: 20px; page-break-inside: avoid; break-inside: avoid; }
-    .pdf-timetable .outlet-title { background: #f0f0f0; border-bottom: 1px solid #ccc; padding: 10px; font-weight: bold; }
-    .pdf-timetable .week-table { border-collapse: collapse; width: 100%; }
-    .pdf-timetable .week-table th, .pdf-timetable .week-table td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
-    .pdf-timetable .week-table th { background: #eaeef2; font-weight: bold; }
-    .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; }
+
+    /* --- Compact styles for PDF (single page) --- */
+    .pdf-timetable {
+      font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
+      padding: 10px;
+      background: white;
+    }
+    .pdf-timetable h2 {
+      font-size: 18px;
+      margin: 0 0 10px 0;
+      text-align: center;
+    }
+    .pdf-timetable .outlet-card {
+      border: 1px solid #ccc;
+      margin-bottom: 12px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .pdf-timetable .outlet-title {
+      background: #f0f0f0;
+      padding: 6px 10px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .pdf-timetable .week-table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 10px;
+    }
+    .pdf-timetable .week-table th,
+    .pdf-timetable .week-table td {
+      border: 1px solid #ccc;
+      padding: 4px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .pdf-timetable .week-table th {
+      background: #eaeef2;
+      font-weight: bold;
+      font-size: 10px;
+    }
+    .pdf-timetable .staff-name-cell {
+      background: #f9f9f9;
+      font-weight: 600;
+      font-size: 10px;
+    }
+    .pdf-timetable .shift-text {
+      font-size: 9px;
+    }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -52,7 +94,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Monday First</h1>
+    <h1>🗓️ Staff Timetable · One‑Page PDF</h1>
     <div>Select any date → automatically shows the week starting on Monday</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -64,7 +106,7 @@
     <div class="toolbar">
       <div>
         <button id="pushBtn" class="google">📤 Submit</button>
-        <button id="pdfBtn" class="pdf">📄 Download PDF</button>
+        <button id="pdfBtn" class="pdf">📄 Download PDF (One Page)</button>
       </div>
       <div>
         <button id="resetBtn" class="danger">⚠️ Reset all data</button>
@@ -78,7 +120,8 @@
     🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Afternoon → previous staff gets Morning; Full Day → next staff gets Off; Off → next staff gets Full Day.<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes – full manual control.<br>
     🚀 <strong>Auto‑pull</strong>: when you change the week, it loads data from Google Sheets automatically.<br>
-    📅 <strong>Week always starts on Monday</strong> (Mon → Tue → Wed → Thu → Fri → Sat → Sun).
+    📅 <strong>Week always starts on Monday</strong> (Mon → Tue → Wed → Thu → Fri → Sat → Sun).<br>
+    🖨️ <strong>PDF is optimised to fit all three outlets on a single landscape page.</strong>
   </div>
 </div>
 
@@ -100,7 +143,6 @@
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzp8nkgSQiB2cuCEoC_FjxESlQYAmiFKr_Ua0MVn4HKqBzA-UAoC96smtYlr0SsFSA6zQ/exec'; // ⚠️ REPLACE WITH YOUR URL
   // ========================================================
 
-  // Day order: Monday first, Sunday last
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const OUTLETS = [
     { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
@@ -136,17 +178,15 @@
     localStorage.setItem(STORAGE_FLEX, JSON.stringify(flexibleMode));
   }
 
-  // Get Monday of any given date (using UTC to avoid timezone shifts)
   function getMonday(date) {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const day = d.getUTCDay(); // 0=Sunday, 1=Monday...6=Saturday
+    const day = d.getUTCDay();
     const diff = (day === 0 ? 6 : day - 1);
     d.setUTCDate(d.getUTCDate() - diff);
     d.setUTCHours(0,0,0,0);
     return d;
   }
 
-  // Get the next Monday after today (coming Monday)
   function getNextMonday(date) {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const day = d.getUTCDay();
@@ -156,12 +196,8 @@
     return d;
   }
 
-  function formatDate(date) {
-    return date.toISOString().split('T')[0];
-  }
-  function formatDateShort(date) {
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  }
+  function formatDate(date) { return date.toISOString().split('T')[0]; }
+  function formatDateShort(date) { return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
 
   function getKey(weekStart, outletId, staff, dayIdx) { return `${weekStart}|${outletId}|${staff}|${dayIdx}`; }
   function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
@@ -266,7 +302,6 @@
     const container = document.getElementById('outletsContainer');
     container.innerHTML = '';
     const weekDates = getWeekDates(new Date(currentWeekStart));
-    // FIXED: use DAY_NAMES array directly (Monday first) and map to each date in order
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
 
     for (let outlet of OUTLETS) {
@@ -341,21 +376,18 @@
     document.getElementById('weekRangeDisplay').innerText = `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`;
   }
 
-  // When the date picker changes, force the value to the Monday of that week
   function setWeekFromPicker() {
     let pickerDate = document.getElementById('weekStartPicker').value;
     if (!pickerDate) return;
     const selectedDate = new Date(pickerDate);
     const monday = getMonday(selectedDate);
     const mondayStr = formatDate(monday);
-    // Update picker to show the Monday
     document.getElementById('weekStartPicker').value = mondayStr;
     currentWeekStart = mondayStr;
     renderAll();
     pullFromSheet(true);
   }
 
-  // Reset to the coming Monday (next Monday from today)
   function resetToComingMonday() {
     const comingMonday = getNextMonday(new Date());
     const mondayStr = formatDate(comingMonday);
@@ -365,7 +397,7 @@
     pullFromSheet(true);
   }
 
-  // ==================== JSONP FOR PULL (READ) ====================
+  // ==================== JSONP FOR PULL ====================
   function jsonpRequest(params, callbackName) {
     return new Promise((resolve, reject) => {
       const callback = callbackName || 'jsonp_callback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -391,7 +423,7 @@
     });
   }
 
-  // ==================== FETCH POST FOR PUSH (WRITE) ====================
+  // ==================== FETCH POST FOR PUSH ====================
   async function postToSheet(data) {
     const formData = new URLSearchParams();
     for (let [k, v] of Object.entries(data)) {
@@ -464,12 +496,12 @@
     }
   }
 
-  // ==================== PDF GENERATION ====================
+  // ==================== PDF GENERATION (optimised for one page) ====================
   function buildPDFHTML() {
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
     let html = `<div class="pdf-timetable">
-      <h2 style="text-align:center;">Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
+      <h2>Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
     for (let outlet of OUTLETS) {
       const staffList = staffPerStore[outlet.id] || [];
       html += `<div class="outlet-card">
@@ -486,7 +518,7 @@
           else if (shift === "afternoon") display = outlet.shiftTimes.afternoon;
           else if (shift === "full") display = "Full Day";
           else display = "— Off —";
-          html += `<td>${display}</td>`;
+          html += `<td><span class="shift-text">${display}</span></td>`;
         }
         html += `</tr>`;
       }
@@ -499,7 +531,7 @@
   async function downloadCleanPDF() {
     const pdfBtn = document.getElementById('pdfBtn');
     const originalText = pdfBtn.innerText;
-    pdfBtn.innerText = "⏳ Loading data...";
+    pdfBtn.innerText = "⏳ Fetching latest data...";
     pdfBtn.disabled = true;
     await pullFromSheet(false);
     pdfBtn.innerText = "⏳ Generating PDF...";
@@ -508,10 +540,21 @@
     tempDiv.innerHTML = pdfHTML;
     document.body.appendChild(tempDiv);
     try {
-      const opt = { margin: [0.5,0.5,0.5,0.5], filename: `Timetable_${currentWeekStart}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' } };
+      const opt = {
+        margin:        [0.2, 0.2, 0.2, 0.2],   // small margins (top, right, bottom, left) in inches
+        filename:     `Timetable_${currentWeekStart}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 1.8, letterRendering: true, useCORS: true, logging: false },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+      };
       await html2pdf().set(opt).from(tempDiv).save();
-    } catch(err) { alert("PDF failed"); }
-    finally { pdfBtn.innerText = originalText; pdfBtn.disabled = false; document.body.removeChild(tempDiv); }
+    } catch(err) {
+      alert("PDF generation failed: " + err);
+    } finally {
+      pdfBtn.innerText = originalText;
+      pdfBtn.disabled = false;
+      document.body.removeChild(tempDiv);
+    }
   }
 
   function resetAll() {
