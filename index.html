@@ -100,7 +100,7 @@
     <div class="toolbar">
       <div>
         <button id="pullBtn" class="google">📥 Pull from Google Sheet</button>
-        <button id="pdfBtn" class="pdf">📄 Download PDF (Clean)</button>
+        <button id="pdfBtn" class="pdf">📄 Download PDF (Auto‑Pull)</button>
       </div>
       <div>
         <button id="pushBtn" class="google">📤 Push to Google Sheet</button>
@@ -115,7 +115,7 @@
   <div id="outletsContainer"></div>
   <div class="footer">
     📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.<br>
-    🖨️ Click "Download PDF (Clean)" to export a neat, single‑page timetable without UI elements.
+    🖨️ Click "Download PDF (Auto‑Pull)" to fetch the latest data from Google Sheets and save a clean PDF.
   </div>
 </div>
 
@@ -381,27 +381,45 @@
       if (result.assignments) assignments = result.assignments;
       saveLocal();
       renderAll();
-      alert("✅ Pulled from Google Sheet!");
+      return true;
     }
+    return false;
   }
 
-  // ==================== CLEAN PDF GENERATION ====================
+  // ==================== CLEAN PDF GENERATION (auto‑pull first) ====================
   async function downloadCleanPDF() {
-    // 1. Clone the entire timetable container
+    const pdfBtn = document.getElementById('pdfBtn');
+    const originalText = pdfBtn.innerText;
+    pdfBtn.innerText = "⏳ Fetching data...";
+    pdfBtn.disabled = true;
+    
+    // First, pull latest data from Google Sheet for the current week
+    const pullSuccess = await pullFromSheet();
+    if (!pullSuccess) {
+      alert("Failed to pull data from Google Sheet. Please check your connection and script URL.");
+      pdfBtn.innerText = originalText;
+      pdfBtn.disabled = false;
+      return;
+    }
+    
+    pdfBtn.innerText = "⏳ Generating PDF...";
+    
+    // Now generate PDF from the updated data
     const originalContainer = document.getElementById('outletsContainer');
     if (!originalContainer || originalContainer.children.length === 0) {
       alert("No timetable data to export.");
+      pdfBtn.innerText = originalText;
+      pdfBtn.disabled = false;
       return;
     }
 
-    // Create a deep clone
     const clone = originalContainer.cloneNode(true);
     
-    // 2. Remove all edit buttons and other interactive elements from clone
+    // Remove edit buttons
     const editButtons = clone.querySelectorAll('.edit-staff-btn');
     editButtons.forEach(btn => btn.remove());
     
-    // 3. Replace all <select> elements with the selected option's text
+    // Replace selects with text
     const selects = clone.querySelectorAll('select');
     selects.forEach(select => {
       const selectedOption = select.options[select.selectedIndex];
@@ -412,31 +430,23 @@
       select.parentNode.replaceChild(span, select);
     });
     
-    // 4. Remove the extra info row (the one with morning/afternoon/full times) – optional but cleaner
+    // Remove the extra info row (optional)
     const extraInfoDivs = clone.querySelectorAll('.outlet-title + div');
     extraInfoDivs.forEach(div => {
       if (div.style.fontSize === '0.7rem') div.remove();
     });
     
-    // 5. Wrap the clone in a container with PDF-specific styles
     const pdfContainer = document.createElement('div');
     pdfContainer.className = 'pdf-timetable';
     pdfContainer.appendChild(clone);
     
-    // 6. Add a title and week range at the top
     const title = document.createElement('h2');
     title.textContent = `Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}`;
     title.style.textAlign = 'center';
     title.style.marginBottom = '20px';
     pdfContainer.insertBefore(title, pdfContainer.firstChild);
     
-    // 7. Temporarily append to body, generate PDF, then remove
     document.body.appendChild(pdfContainer);
-    
-    const pdfBtn = document.getElementById('pdfBtn');
-    const originalText = pdfBtn.innerText;
-    pdfBtn.innerText = "⏳ Generating PDF...";
-    pdfBtn.disabled = true;
     
     try {
       const opt = {
