@@ -38,6 +38,13 @@
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
+    .pdf-timetable { font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; padding: 20px; background: white; }
+    .pdf-timetable .outlet-card { border: 1px solid #ddd; margin-bottom: 20px; page-break-inside: avoid; break-inside: avoid; }
+    .pdf-timetable .outlet-title { background: #f0f0f0; border-bottom: 1px solid #ccc; padding: 10px; font-weight: bold; }
+    .pdf-timetable .week-table { border-collapse: collapse; width: 100%; }
+    .pdf-timetable .week-table th, .pdf-timetable .week-table td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
+    .pdf-timetable .week-table th { background: #eaeef2; font-weight: bold; }
+    .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
@@ -69,7 +76,7 @@
   <div id="outletsContainer"></div>
   <div class="footer">
     📌 Each outlet has its own staff list. Click "Edit Staff" or "Flexible" on any outlet.<br>
-    🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Off → next staff gets Full Day.<br>
+    🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Afternoon → previous staff gets Morning; Off → next staff gets Full Day.<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes – full manual control.
   </div>
 </div>
@@ -89,7 +96,7 @@
 
 <script>
   // ==================== YOUR SCRIPT URL ====================
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySlVVBl8kFStvQA4Wb2DZovIXkEw6YGiCXfz54_iyR0ZbL63izjiJ5dtls4IFQq6nNUw/exec'; // ⚠️ REPLACE
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySlVVBl8kFStvQA4Wb2DZovIXkEw6YGiCXfz54_iyR0ZbL63izjiJ5dtls4IFQq6nNUw/exec'; // ⚠️ REPLACE WITH YOUR URL
   // ========================================================
 
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -107,7 +114,7 @@
   let staffPerStore = {};
   let assignments = {};
   let currentWeekStart = null;
-  let flexibleMode = {}; // storeId -> boolean (true = flexible ON, no auto-pairing)
+  let flexibleMode = {};
 
   const STORAGE_STAFF = "timetable_staff_per_store";
   const STORAGE_ASSIGN = "timetable_assign_v5";
@@ -150,32 +157,40 @@
 
   function getKey(weekStart, outletId, staff, dayIdx) { return `${weekStart}|${outletId}|${staff}|${dayIdx}`; }
   function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
+
+  // 🔄 SYMMETRICAL AUTO-PAIRING (with circular wrap)
   function setAssignment(weekStart, outletId, staff, dayIdx, value, skipAuto = false) {
     const key = getKey(weekStart, outletId, staff, dayIdx);
     if (!value) delete assignments[key];
     else assignments[key] = value;
     saveLocal();
-    renderAll(); // re-render to show changes
+    renderAll();
 
-    // Auto-pairing logic (only if flexibleMode is OFF for this store and skipAuto is false)
     if (!skipAuto && !flexibleMode[outletId]) {
       const staffList = staffPerStore[outletId] || [];
       if (staffList.length < 2) return;
       const currentIndex = staffList.indexOf(staff);
       if (currentIndex === -1) return;
+      const prevStaff = staffList[(currentIndex - 1 + staffList.length) % staffList.length];
       const nextStaff = staffList[(currentIndex + 1) % staffList.length];
-      if (!nextStaff) return;
 
       if (value === "morning") {
-        // Set next staff to afternoon
         const nextKey = getKey(weekStart, outletId, nextStaff, dayIdx);
         if (assignments[nextKey] !== "afternoon") {
           assignments[nextKey] = "afternoon";
           saveLocal();
           renderAll();
         }
-      } else if (value === "" || value === "off") {
-        // If setting to Off, set next staff to full day (if not already)
+      }
+      else if (value === "afternoon") {
+        const prevKey = getKey(weekStart, outletId, prevStaff, dayIdx);
+        if (assignments[prevKey] !== "morning") {
+          assignments[prevKey] = "morning";
+          saveLocal();
+          renderAll();
+        }
+      }
+      else if (value === "" || value === "off") {
         const nextKey = getKey(weekStart, outletId, nextStaff, dayIdx);
         if (assignments[nextKey] !== "full") {
           assignments[nextKey] = "full";
@@ -186,7 +201,6 @@
     }
   }
 
-  // Toggle flexible mode for a store
   function toggleFlexible(outletId) {
     flexibleMode[outletId] = !flexibleMode[outletId];
     saveLocal();
@@ -212,7 +226,6 @@
     const raw = document.getElementById('modalStaffInput').value;
     const newList = raw.split(',').map(s=>s.trim()).filter(s=>s);
     staffPerStore[currentEditingOutlet] = newList;
-    // Remove assignments for staff no longer in list
     for (let key in assignments) {
       const parts = key.split('|');
       if (parts.length === 4 && parts[1] === currentEditingOutlet && !newList.includes(parts[2])) {
@@ -400,7 +413,7 @@
         <div class="outlet-title">${outlet.name} (${outlet.hours})</div>
         <table class="week-table"><thead><tr><th>Staff / Day</th>`;
       for (let label of headerLabels) html += `<th>${label}</th>`;
-      html += `</thead><tbody>`;
+      html += `</tr></thead><tbody>`;
       for (let staff of staffList) {
         html += `<tr><td class="staff-name-cell">${staff}</td>`;
         for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
