@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Clean PDF Export</title>
+  <title>Weekly Timetable | Auto‑Pairing + Flexible Mode</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -24,7 +24,8 @@
     .outlet-card { background: white; border-radius: 28px; margin-bottom: 32px; overflow-x: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .outlet-title { background: #f8fafc; padding: 16px 20px; border-bottom: 2px solid #e2edff; font-weight: 700; font-size: 1.3rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
     .hours { font-size: 0.8rem; color: #3b82f6; background: #eef2ff; display: inline-block; padding: 4px 12px; border-radius: 40px; }
-    .edit-staff-btn { background: #e2e8f0; border: none; border-radius: 40px; padding: 4px 12px; font-size: 0.7rem; cursor: pointer; }
+    .edit-staff-btn, .flex-toggle-btn { background: #e2e8f0; border: none; border-radius: 40px; padding: 4px 12px; font-size: 0.7rem; cursor: pointer; margin-left: 8px; }
+    .flex-toggle-btn.active { background: #3b82f6; color: white; }
     .week-table { width: 100%; border-collapse: collapse; min-width: 700px; }
     .week-table th { background: #f1f5f9; padding: 12px 8px; font-size: 0.85rem; border-bottom: 1px solid #e2e8f0; }
     .week-table td { padding: 12px 8px; border-bottom: 1px solid #edf2f8; vertical-align: top; }
@@ -37,51 +38,13 @@
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
-
-    /* Styles for the clean PDF – will be applied when generating PDF content */
-    .pdf-timetable {
-      font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
-      padding: 20px;
-      background: white;
-    }
-    .pdf-timetable .outlet-card {
-      border: 1px solid #ddd;
-      margin-bottom: 20px;
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-    .pdf-timetable .outlet-title {
-      background: #f0f0f0;
-      border-bottom: 1px solid #ccc;
-      padding: 10px;
-      font-weight: bold;
-    }
-    .pdf-timetable .week-table {
-      border-collapse: collapse;
-      width: 100%;
-    }
-    .pdf-timetable .week-table th,
-    .pdf-timetable .week-table td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
-      vertical-align: top;
-    }
-    .pdf-timetable .week-table th {
-      background: #eaeef2;
-      font-weight: bold;
-    }
-    .pdf-timetable .staff-name-cell {
-      background: #f9f9f9;
-      font-weight: 600;
-    }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Clean PDF Export</h1>
+    <h1>🗓️ Staff Timetable · Auto‑Pairing + Flexible Mode</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -105,8 +68,9 @@
 
   <div id="outletsContainer"></div>
   <div class="footer">
-    📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.<br>
-    🖨️ Click "Download PDF (Auto‑Pull)" to fetch the latest data from Google Sheets and save a clean PDF.
+    📌 Each outlet has its own staff list. Click "Edit Staff" or "Flexible" on any outlet.<br>
+    🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Off → next staff gets Full Day.<br>
+    🔓 <strong>Flexible ON</strong>: no automatic changes – full manual control.
   </div>
 </div>
 
@@ -125,18 +89,15 @@
 
 <script>
   // ==================== YOUR SCRIPT URL ====================
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySlVVBl8kFStvQA4Wb2DZovIXkEw6YGiCXfz54_iyR0ZbL63izjiJ5dtls4IFQq6nNUw/exec'; // ⚠️ REPLACE WITH YOUR URL
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySlVVBl8kFStvQA4Wb2DZovIXkEw6YGiCXfz54_iyR0ZbL63izjiJ5dtls4IFQq6nNUw/exec'; // ⚠️ REPLACE
   // ========================================================
 
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-  
-  // Updated Sunshine Central hours: now 10:00 – 22:00 (morning 10-4, afternoon 4-10)
   const OUTLETS = [
     { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
     { id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
     { id: "queens", name: "🛍️ Queens Mall", hours: "10:30 – 22:30", shiftTimes: { morning: "10:30 – 16:00", afternoon: "16:30 – 22:30", full: "10:30 – 22:30" } }
   ];
-  
   const DEFAULT_STAFF_PER_STORE = {
     gurney: ["Amy Chen", "Ben Lee", "Carla Raj"],
     sunshine: ["David Lim", "Emma Tan", "Fiona Wong"],
@@ -146,22 +107,26 @@
   let staffPerStore = {};
   let assignments = {};
   let currentWeekStart = null;
+  let flexibleMode = {}; // storeId -> boolean (true = flexible ON, no auto-pairing)
 
   const STORAGE_STAFF = "timetable_staff_per_store";
   const STORAGE_ASSIGN = "timetable_assign_v5";
+  const STORAGE_FLEX = "timetable_flexible_mode";
 
   function loadLocal() {
     const storedStaff = localStorage.getItem(STORAGE_STAFF);
     staffPerStore = storedStaff ? JSON.parse(storedStaff) : JSON.parse(JSON.stringify(DEFAULT_STAFF_PER_STORE));
     const storedAssign = localStorage.getItem(STORAGE_ASSIGN);
     assignments = storedAssign ? JSON.parse(storedAssign) : {};
+    const storedFlex = localStorage.getItem(STORAGE_FLEX);
+    flexibleMode = storedFlex ? JSON.parse(storedFlex) : {};
   }
   function saveLocal() {
     localStorage.setItem(STORAGE_STAFF, JSON.stringify(staffPerStore));
     localStorage.setItem(STORAGE_ASSIGN, JSON.stringify(assignments));
+    localStorage.setItem(STORAGE_FLEX, JSON.stringify(flexibleMode));
   }
 
-  // Get Monday of a given date (set to start of day)
   function getMonday(date) {
     const d = new Date(date);
     const day = d.getDay();
@@ -171,38 +136,64 @@
     return d;
   }
 
-  // Get the next Monday after today (coming Monday)
   function getNextMonday(date) {
     const d = new Date(date);
     const day = d.getDay();
-    // days until next Monday: (8 - day) % 7; if day=1 (Monday) gives 7, so next Monday
     const daysToAdd = (day === 1 ? 7 : (8 - day) % 7);
     d.setDate(d.getDate() + daysToAdd);
     d.setHours(0,0,0,0);
     return d;
   }
 
-  function formatDate(date) {
-    return date.toISOString().split('T')[0];
-  }
-  function formatDateShort(date) {
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  }
+  function formatDate(date) { return date.toISOString().split('T')[0]; }
+  function formatDateShort(date) { return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
 
-  function getKey(weekStart, outletId, staff, dayIdx) {
-    return `${weekStart}|${outletId}|${staff}|${dayIdx}`;
-  }
-  function getAssignment(weekStart, outletId, staff, dayIdx) {
-    return assignments[getKey(weekStart, outletId, staff, dayIdx)] || "";
-  }
-  function setAssignment(weekStart, outletId, staff, dayIdx, value) {
+  function getKey(weekStart, outletId, staff, dayIdx) { return `${weekStart}|${outletId}|${staff}|${dayIdx}`; }
+  function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
+  function setAssignment(weekStart, outletId, staff, dayIdx, value, skipAuto = false) {
     const key = getKey(weekStart, outletId, staff, dayIdx);
     if (!value) delete assignments[key];
     else assignments[key] = value;
     saveLocal();
+    renderAll(); // re-render to show changes
+
+    // Auto-pairing logic (only if flexibleMode is OFF for this store and skipAuto is false)
+    if (!skipAuto && !flexibleMode[outletId]) {
+      const staffList = staffPerStore[outletId] || [];
+      if (staffList.length < 2) return;
+      const currentIndex = staffList.indexOf(staff);
+      if (currentIndex === -1) return;
+      const nextStaff = staffList[(currentIndex + 1) % staffList.length];
+      if (!nextStaff) return;
+
+      if (value === "morning") {
+        // Set next staff to afternoon
+        const nextKey = getKey(weekStart, outletId, nextStaff, dayIdx);
+        if (assignments[nextKey] !== "afternoon") {
+          assignments[nextKey] = "afternoon";
+          saveLocal();
+          renderAll();
+        }
+      } else if (value === "" || value === "off") {
+        // If setting to Off, set next staff to full day (if not already)
+        const nextKey = getKey(weekStart, outletId, nextStaff, dayIdx);
+        if (assignments[nextKey] !== "full") {
+          assignments[nextKey] = "full";
+          saveLocal();
+          renderAll();
+        }
+      }
+    }
+  }
+
+  // Toggle flexible mode for a store
+  function toggleFlexible(outletId) {
+    flexibleMode[outletId] = !flexibleMode[outletId];
+    saveLocal();
     renderAll();
   }
 
+  // ==================== UI RENDERING ====================
   let currentEditingOutlet = null;
   function openStaffModal(outletId) {
     currentEditingOutlet = outletId;
@@ -221,6 +212,7 @@
     const raw = document.getElementById('modalStaffInput').value;
     const newList = raw.split(',').map(s=>s.trim()).filter(s=>s);
     staffPerStore[currentEditingOutlet] = newList;
+    // Remove assignments for staff no longer in list
     for (let key in assignments) {
       const parts = key.split('|');
       if (parts.length === 4 && parts[1] === currentEditingOutlet && !newList.includes(parts[2])) {
@@ -242,7 +234,6 @@
     return dates;
   }
 
-  // Render the interactive UI (with selects)
   function renderAll() {
     if (!currentWeekStart) return;
     const container = document.getElementById('outletsContainer');
@@ -252,16 +243,21 @@
 
     for (let outlet of OUTLETS) {
       const staffList = staffPerStore[outlet.id] || [];
+      const flexActive = flexibleMode[outlet.id] || false;
       const card = document.createElement('div');
       card.className = 'outlet-card';
       card.innerHTML = `
         <div class="outlet-title">
           <span>${outlet.name} <span class="hours">🕒 ${outlet.hours}</span></span>
-          <button class="edit-staff-btn" data-outlet="${outlet.id}">✏️ Edit Staff</button>
+          <div>
+            <button class="edit-staff-btn" data-outlet="${outlet.id}">✏️ Edit Staff</button>
+            <button class="flex-toggle-btn ${flexActive ? 'active' : ''}" data-outlet="${outlet.id}">🔓 Flexible ${flexActive ? 'ON' : 'OFF'}</button>
+          </div>
         </div>
         <div style="font-size:0.7rem; padding: 0 20px 8px;">🌅 Morning: ${outlet.shiftTimes.morning} &nbsp;|&nbsp; 🌙 Afternoon: ${outlet.shiftTimes.afternoon} &nbsp;|&nbsp; 🌞 Full: ${outlet.shiftTimes.full}</div>
       `;
       card.querySelector('.edit-staff-btn').addEventListener('click', () => openStaffModal(outlet.id));
+      card.querySelector('.flex-toggle-btn').addEventListener('click', () => toggleFlexible(outlet.id));
       
       if (staffList.length === 0) {
         const emptyMsg = document.createElement('div');
@@ -301,7 +297,7 @@
           const mornOpt = document.createElement('option'); mornOpt.value = "morning"; mornOpt.textContent = `🌅 Morning (${outlet.shiftTimes.morning})`; if (current === "morning") mornOpt.selected = true; select.appendChild(mornOpt);
           const aftOpt = document.createElement('option'); aftOpt.value = "afternoon"; aftOpt.textContent = `🌙 Afternoon (${outlet.shiftTimes.afternoon})`; if (current === "afternoon") aftOpt.selected = true; select.appendChild(aftOpt);
           const fullOpt = document.createElement('option'); fullOpt.value = "full"; fullOpt.textContent = `🌞 Full Day (${outlet.shiftTimes.full})`; if (current === "full") fullOpt.selected = true; select.appendChild(fullOpt);
-          select.addEventListener('change', ((o, s, d) => () => setAssignment(currentWeekStart, o.id, s, d, select.value))(outlet, staff, dayIdx));
+          select.addEventListener('change', ((o, s, d) => () => setAssignment(currentWeekStart, o.id, s, d, select.value, false))(outlet, staff, dayIdx));
           cell.appendChild(select);
           row.appendChild(cell);
         }
@@ -320,7 +316,6 @@
   function setWeekFromPicker() {
     let pickerVal = document.getElementById('weekStartPicker').value;
     if (!pickerVal) {
-      // Fallback to coming Monday
       const comingMonday = getNextMonday(new Date());
       pickerVal = formatDate(comingMonday);
       document.getElementById('weekStartPicker').value = pickerVal;
@@ -329,7 +324,7 @@
     renderAll();
   }
 
-  // ==================== JSONP HELPERS ====================
+  // ==================== JSONP / SHEET SYNC ====================
   function jsonpRequest(params, callbackName) {
     return new Promise((resolve, reject) => {
       const callback = callbackName || 'jsonp_callback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -338,14 +333,12 @@
         if (v !== undefined && v !== null) url.searchParams.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
       }
       url.searchParams.append('callback', callback);
-      
       window[callback] = function(data) {
         delete window[callback];
         document.body.removeChild(script);
         if (data.status === 'success') resolve(data.data);
         else reject(new Error(data.error || 'Unknown error'));
       };
-      
       const script = document.createElement('script');
       script.src = url.toString();
       script.onerror = function() {
@@ -359,14 +352,14 @@
 
   async function callScript(action, data = {}) {
     if (!SCRIPT_URL || SCRIPT_URL.includes('YOUR_SCRIPT_ID')) {
-      alert("Please replace 'YOUR_SCRIPT_ID' in the SCRIPT_URL constant with your actual Google Apps Script URL.");
+      alert("Please replace 'YOUR_SCRIPT_ID' in the SCRIPT_URL constant.");
       return null;
     }
     try {
       const params = { action, ...data };
       return await jsonpRequest(params);
     } catch (err) {
-      alert(`Sync error: ${err.message}\nCheck URL and script deployment.`);
+      alert(`Sync error: ${err.message}`);
       return null;
     }
   }
@@ -389,32 +382,25 @@
       if (result.assignments) assignments = result.assignments;
       saveLocal();
       renderAll();
-      const assignCount = Object.keys(assignments).length;
-      alert(`✅ Pulled from Google Sheet!\nFound ${assignCount} shift assignments for week ${currentWeekStart}.`);
+      alert(`✅ Pulled from Google Sheet! Loaded ${Object.keys(assignments).length} shifts.`);
       return true;
     }
     return false;
   }
 
-  // ==================== BUILD CLEAN PDF HTML FROM DATA ====================
+  // ==================== PDF GENERATION ====================
   function buildPDFHTML() {
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map(d => `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]}, ${formatDateShort(d)}`);
-    
     let html = `<div class="pdf-timetable">
       <h2 style="text-align:center;">Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
-    
     for (let outlet of OUTLETS) {
       const staffList = staffPerStore[outlet.id] || [];
       html += `<div class="outlet-card">
         <div class="outlet-title">${outlet.name} (${outlet.hours})</div>
-        <table class="week-table">
-          <thead><tr><th>Staff / Day</th>`;
-      for (let label of headerLabels) {
-        html += `<th>${label}</th>`;
-      }
+        <table class="week-table"><thead><tr><th>Staff / Day</th>`;
+      for (let label of headerLabels) html += `<th>${label}</th>`;
       html += `</thead><tbody>`;
-      
       for (let staff of staffList) {
         html += `<tr><td class="staff-name-cell">${staff}</td>`;
         for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
@@ -437,47 +423,24 @@
   async function downloadCleanPDF() {
     const pdfBtn = document.getElementById('pdfBtn');
     const originalText = pdfBtn.innerText;
-    pdfBtn.innerText = "⏳ Fetching data...";
+    pdfBtn.innerText = "⏳ Pulling data...";
     pdfBtn.disabled = true;
-    
-    // First, pull latest data from Google Sheet for the current week
     const pullSuccess = await pullFromSheet();
-    if (!pullSuccess) {
-      alert("Failed to pull data from Google Sheet. Please check your connection and script URL.");
-      pdfBtn.innerText = originalText;
-      pdfBtn.disabled = false;
-      return;
-    }
-    
+    if (!pullSuccess) { pdfBtn.innerText = originalText; pdfBtn.disabled = false; return; }
     pdfBtn.innerText = "⏳ Generating PDF...";
-    
-    // Build fresh HTML from current data
     const pdfHTML = buildPDFHTML();
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = pdfHTML;
     document.body.appendChild(tempDiv);
-    
     try {
-      const opt = {
-        margin:        [0.5, 0.5, 0.5, 0.5],
-        filename:     `Timetable_${currentWeekStart}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, letterRendering: true, useCORS: true, logging: false },
-        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
-      };
+      const opt = { margin: [0.5,0.5,0.5,0.5], filename: `Timetable_${currentWeekStart}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' } };
       await html2pdf().set(opt).from(tempDiv).save();
-    } catch (err) {
-      console.error("PDF generation failed:", err);
-      alert("Failed to generate PDF. Please try again.");
-    } finally {
-      pdfBtn.innerText = originalText;
-      pdfBtn.disabled = false;
-      document.body.removeChild(tempDiv);
-    }
+    } catch(err) { alert("PDF failed"); }
+    finally { pdfBtn.innerText = originalText; pdfBtn.disabled = false; document.body.removeChild(tempDiv); }
   }
 
   function exportJSON() {
-    const data = { staffPerStore, assignments };
+    const data = { staffPerStore, assignments, flexibleMode };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
     a.download = `timetable_${currentWeekStart}.json`;
@@ -490,18 +453,20 @@
         const data = JSON.parse(e.target.result);
         if (data.staffPerStore) staffPerStore = data.staffPerStore;
         if (data.assignments) assignments = data.assignments;
+        if (data.flexibleMode) flexibleMode = data.flexibleMode;
         saveLocal();
         renderAll();
-        alert("Imported successfully!");
+        alert("Imported!");
       } catch(err) { alert("Invalid JSON"); }
     };
     reader.readAsText(file);
   }
 
   function resetAll() {
-    if (confirm("Delete all shifts and reset staff lists to default?")) {
+    if (confirm("Reset all data?")) {
       staffPerStore = JSON.parse(JSON.stringify(DEFAULT_STAFF_PER_STORE));
       assignments = {};
+      flexibleMode = {};
       saveLocal();
       renderAll();
     }
@@ -509,11 +474,9 @@
 
   // ==================== INIT ====================
   loadLocal();
-  // Set initial date to the coming Monday (next Monday from today)
   const comingMonday = getNextMonday(new Date());
-  const defaultMondayStr = formatDate(comingMonday);
-  document.getElementById('weekStartPicker').value = defaultMondayStr;
-  currentWeekStart = defaultMondayStr;
+  document.getElementById('weekStartPicker').value = formatDate(comingMonday);
+  currentWeekStart = formatDate(comingMonday);
   renderAll();
 
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
