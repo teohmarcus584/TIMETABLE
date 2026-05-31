@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Auto‑Pairing + Flexible Mode</title>
+  <title>Weekly Timetable | Auto‑Pull + Submit</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -63,14 +63,10 @@
     </div>
     <div class="toolbar">
       <div>
-        <button id="pullBtn" class="google hidden">📥 Pull from Google Sheet</button>
         <button id="pushBtn" class="google">📤 Submit</button>
         <button id="pdfBtn" class="pdf">📄 Download PDF</button>
       </div>
       <div>
-        <button id="exportBtn" class="primary hidden">💾 Export JSON</button>
-        <button id="importBtn" class="hidden">📂 Import JSON</button>
-        <input type="file" id="importFile" accept=".json" style="display:none">
         <button id="resetBtn" class="danger">⚠️ Reset all</button>
       </div>
     </div>
@@ -81,7 +77,7 @@
     📌 Each outlet has its own staff list. Click "Edit Staff" or "Flexible" on any outlet.<br>
     🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Afternoon → previous staff gets Morning; Full Day → next staff gets Off; Off → next staff gets Full Day.<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes – full manual control.<br>
-    🚀 Page automatically loads the latest schedule from Google Sheets.
+    🚀 <strong>Auto‑pull</strong>: when you change the week, it loads data from Google Sheets automatically.
   </div>
 </div>
 
@@ -162,7 +158,6 @@
   function getKey(weekStart, outletId, staff, dayIdx) { return `${weekStart}|${outletId}|${staff}|${dayIdx}`; }
   function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
 
-  // Auto‑pairing with Full Day ↔ Off
   function setAssignment(weekStart, outletId, staff, dayIdx, value, skipAuto = false) {
     const key = getKey(weekStart, outletId, staff, dayIdx);
     if (!value) delete assignments[key];
@@ -219,7 +214,6 @@
     renderAll();
   }
 
-  // ==================== UI RENDERING ====================
   let currentEditingOutlet = null;
   function openStaffModal(outletId) {
     currentEditingOutlet = outletId;
@@ -347,9 +341,11 @@
     }
     currentWeekStart = pickerVal;
     renderAll();
+    // Auto‑pull when date changes
+    pullFromSheet(true);
   }
 
-  // ==================== JSONP / SHEET SYNC ====================
+  // ==================== JSONP FOR PULL (READ) ====================
   function jsonpRequest(params, callbackName) {
     return new Promise((resolve, reject) => {
       const callback = callbackName || 'jsonp_callback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -375,44 +371,76 @@
     });
   }
 
-  async function callScript(action, data = {}) {
-    if (!SCRIPT_URL || SCRIPT_URL.includes('YOUR_SCRIPT_ID')) {
-      console.warn("Script URL not set");
-      return null;
+  // ==================== FETCH POST FOR PUSH (WRITE) ====================
+  async function postToSheet(data) {
+    const formData = new URLSearchParams();
+    for (let [k, v] of Object.entries(data)) {
+      formData.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
     }
     try {
-      const params = { action, ...data };
-      return await jsonpRequest(params);
+      const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json();
+      return result;
     } catch (err) {
-      console.error(err);
-      return null;
+      console.error("POST error:", err);
+      throw new Error("Network error: " + err.message);
+    }
+  }
+
+  async function pullFromSheet(showAlert = true) {
+    const statusSpan = document.getElementById('loadStatus');
+    if (showAlert) statusSpan.textContent = "⏳ Syncing...";
+    try {
+      const result = await jsonpRequest({ action: 'pull', weekStart: currentWeekStart });
+      if (result) {
+        if (result.staffPerStore) staffPerStore = result.staffPerStore;
+        if (result.assignments) assignments = result.assignments;
+        saveLocal();
+        renderAll();
+        if (showAlert) {
+          statusSpan.textContent = "✅ Synced";
+          setTimeout(() => { if (statusSpan.textContent === "✅ Synced") statusSpan.textContent = "✅ Data loaded"; }, 2000);
+        }
+        return true;
+      }
+      if (showAlert) statusSpan.textContent = "⚠️ No data";
+      return false;
+    } catch (err) {
+      console.error("Pull error:", err);
+      if (showAlert) statusSpan.textContent = "⚠️ Sync failed";
+      return false;
     }
   }
 
   async function pushToSheet() {
     const payload = {
+      action: 'push',
       weekStart: currentWeekStart,
       staffPerStore: staffPerStore,
       assignments: assignments,
       outlets: OUTLETS.map(o => ({ id: o.id, name: o.name, shiftTimes: o.shiftTimes }))
     };
-    const result = await callScript('push', payload);
-    if (result) alert("✅ Data submitted to Google Sheet!");
-    else alert("Submission failed. Check console.");
-  }
-
-  async function pullFromSheet(showAlert = true) {
-    const result = await callScript('pull', { weekStart: currentWeekStart });
-    if (result) {
-      if (result.staffPerStore) staffPerStore = result.staffPerStore;
-      if (result.assignments) assignments = result.assignments;
-      saveLocal();
-      renderAll();
-      if (showAlert) alert(`✅ Pulled from Google Sheet! Loaded ${Object.keys(assignments).length} shifts.`);
-      return true;
-    } else {
-      if (showAlert) alert("Pull failed. Check URL or sheet.");
-      return false;
+    const pushBtn = document.getElementById('pushBtn');
+    const originalText = pushBtn.innerText;
+    pushBtn.innerText = "⏳ Submitting...";
+    pushBtn.disabled = true;
+    try {
+      const result = await postToSheet(payload);
+      if (result && result.status === 'success') {
+        alert("✅ Data submitted to Google Sheet!");
+      } else {
+        alert("Submission failed: " + (result?.error || "Unknown error. Check console."));
+        console.error("Submit response:", result);
+      }
+    } catch (err) {
+      alert("Submission error: " + err.message);
+      console.error(err);
+    } finally {
+      pushBtn.innerText = originalText;
+      pushBtn.disabled = false;
     }
   }
 
@@ -440,9 +468,9 @@
           else display = "— Off —";
           html += `<td>${display}</td>`;
         }
-        html += `<tr>`;
+        html += `</tr>`;
       }
-      html += `</tbody></table></div>`;
+      html += `</tbody></tr></div>`;
     }
     html += `</div>`;
     return html;
@@ -451,10 +479,10 @@
   async function downloadCleanPDF() {
     const pdfBtn = document.getElementById('pdfBtn');
     const originalText = pdfBtn.innerText;
-    pdfBtn.innerText = "⏳ Pulling data...";
+    pdfBtn.innerText = "⏳ Loading data...";
     pdfBtn.disabled = true;
-    const pullSuccess = await pullFromSheet(false);
-    if (!pullSuccess) { pdfBtn.innerText = originalText; pdfBtn.disabled = false; alert("Pull failed. Cannot generate PDF."); return; }
+    // Refresh data from sheet before generating PDF
+    await pullFromSheet(false);
     pdfBtn.innerText = "⏳ Generating PDF...";
     const pdfHTML = buildPDFHTML();
     const tempDiv = document.createElement('div');
@@ -477,26 +505,14 @@
     }
   }
 
-  // ==================== INIT (with auto-pull) ====================
+  // ==================== INIT ====================
   async function init() {
     loadLocal();
     const comingMonday = getNextMonday(new Date());
     document.getElementById('weekStartPicker').value = formatDate(comingMonday);
     currentWeekStart = formatDate(comingMonday);
     renderAll();
-    const statusSpan = document.getElementById('loadStatus');
-    statusSpan.textContent = "⏳ Syncing with sheet...";
-    try {
-      const success = await pullFromSheet(false);
-      if (success) statusSpan.textContent = "✅ Synced with Google Sheet";
-      else statusSpan.textContent = "⚠️ Sheet sync failed – using local data";
-    } catch (err) {
-      statusSpan.textContent = "⚠️ Sync error – using local data";
-      console.error(err);
-    }
-    setTimeout(() => {
-      if (statusSpan.textContent.includes("Synced")) statusSpan.textContent = "✅ Data loaded";
-    }, 3000);
+    await pullFromSheet(false); // silent auto‑pull on page load
   }
 
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
