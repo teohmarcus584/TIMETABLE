@@ -46,6 +46,7 @@
     .pdf-timetable .week-table th { background: #eaeef2; font-weight: bold; }
     .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
+    .hidden { display: none !important; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
@@ -62,13 +63,13 @@
     </div>
     <div class="toolbar">
       <div>
-        <button id="pullBtn" class="google">📥 Pull from Google Sheet</button>
-        <button id="pdfBtn" class="pdf">📄 Download PDF (Auto‑Pull)</button>
+        <button id="pullBtn" class="google hidden">📥 Pull from Google Sheet</button>
+        <button id="pushBtn" class="google">📤 Submit</button>
+        <button id="pdfBtn" class="pdf">📄 Download PDF</button>
       </div>
       <div>
-        <button id="pushBtn" class="google">📤 Push to Google Sheet</button>
-        <button id="exportBtn" class="primary">💾 Export JSON</button>
-        <button id="importBtn">📂 Import JSON</button>
+        <button id="exportBtn" class="primary hidden">💾 Export JSON</button>
+        <button id="importBtn" class="hidden">📂 Import JSON</button>
         <input type="file" id="importFile" accept=".json" style="display:none">
         <button id="resetBtn" class="danger">⚠️ Reset all</button>
       </div>
@@ -396,8 +397,8 @@
       outlets: OUTLETS.map(o => ({ id: o.id, name: o.name, shiftTimes: o.shiftTimes }))
     };
     const result = await callScript('push', payload);
-    if (result) alert("✅ Pushed to Google Sheet!");
-    else alert("Push failed. Check console.");
+    if (result) alert("✅ Data submitted to Google Sheet!");
+    else alert("Submission failed. Check console.");
   }
 
   async function pullFromSheet(showAlert = true) {
@@ -439,7 +440,7 @@
           else display = "— Off —";
           html += `<td>${display}</td>`;
         }
-        html += `</tr>`;
+        html += `<tr>`;
       }
       html += `</tbody></table></div>`;
     }
@@ -464,29 +465,6 @@
       await html2pdf().set(opt).from(tempDiv).save();
     } catch(err) { alert("PDF failed"); }
     finally { pdfBtn.innerText = originalText; pdfBtn.disabled = false; document.body.removeChild(tempDiv); }
-  }
-
-  function exportJSON() {
-    const data = { staffPerStore, assignments, flexibleMode };
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
-    a.download = `timetable_${currentWeekStart}.json`;
-    a.click();
-  }
-  function importJSON(file) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const data = JSON.parse(e.target.result);
-        if (data.staffPerStore) staffPerStore = data.staffPerStore;
-        if (data.assignments) assignments = data.assignments;
-        if (data.flexibleMode) flexibleMode = data.flexibleMode;
-        saveLocal();
-        renderAll();
-        alert("Imported!");
-      } catch(err) { alert("Invalid JSON"); }
-    };
-    reader.readAsText(file);
   }
 
   function resetAll() {
@@ -522,12 +500,8 @@
   }
 
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
-  document.getElementById('pullBtn').onclick = () => pullFromSheet(true);
-  document.getElementById('pdfBtn').onclick = downloadCleanPDF;
   document.getElementById('pushBtn').onclick = pushToSheet;
-  document.getElementById('exportBtn').onclick = exportJSON;
-  document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
-  document.getElementById('importFile').onchange = e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; };
+  document.getElementById('pdfBtn').onclick = downloadCleanPDF;
   document.getElementById('resetBtn').onclick = resetAll;
   document.getElementById('saveStaffModalBtn').onclick = saveStaffModal;
   document.getElementById('closeStaffModalBtn').onclick = closeStaffModal;
