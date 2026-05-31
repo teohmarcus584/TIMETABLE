@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Auto‑Pull + Auto‑Pairing</title>
+  <title>Weekly Timetable | Auto‑Pairing + Flexible Mode</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -52,7 +52,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Auto‑Pull + Auto‑Pairing</h1>
+    <h1>🗓️ Staff Timetable · Auto‑Pairing (Full ↔ Off)</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -78,7 +78,7 @@
   <div id="outletsContainer"></div>
   <div class="footer">
     📌 Each outlet has its own staff list. Click "Edit Staff" or "Flexible" on any outlet.<br>
-    🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Afternoon → previous staff gets Morning; Off → next staff gets Full Day.<br>
+    🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Afternoon → previous staff gets Morning; Full Day → next staff gets Off; Off → next staff gets Full Day.<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes – full manual control.<br>
     🚀 Page automatically loads the latest schedule from Google Sheets.
   </div>
@@ -161,6 +161,7 @@
   function getKey(weekStart, outletId, staff, dayIdx) { return `${weekStart}|${outletId}|${staff}|${dayIdx}`; }
   function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
 
+  // Auto‑pairing with Full Day ↔ Off
   function setAssignment(weekStart, outletId, staff, dayIdx, value, skipAuto = false) {
     const key = getKey(weekStart, outletId, staff, dayIdx);
     if (!value) delete assignments[key];
@@ -188,6 +189,14 @@
         const prevKey = getKey(weekStart, outletId, prevStaff, dayIdx);
         if (assignments[prevKey] !== "morning") {
           assignments[prevKey] = "morning";
+          saveLocal();
+          renderAll();
+        }
+      }
+      else if (value === "full") {
+        const nextKey = getKey(weekStart, outletId, nextStaff, dayIdx);
+        if (assignments[nextKey] !== "") {
+          assignments[nextKey] = "";
           saveLocal();
           renderAll();
         }
@@ -497,7 +506,6 @@
     document.getElementById('weekStartPicker').value = formatDate(comingMonday);
     currentWeekStart = formatDate(comingMonday);
     renderAll();
-    // Auto-pull from sheet for the current week
     const statusSpan = document.getElementById('loadStatus');
     statusSpan.textContent = "⏳ Syncing with sheet...";
     try {
@@ -513,7 +521,6 @@
     }, 3000);
   }
 
-  // Attach event listeners
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
   document.getElementById('pullBtn').onclick = () => pullFromSheet(true);
   document.getElementById('pdfBtn').onclick = downloadCleanPDF;
