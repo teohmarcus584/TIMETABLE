@@ -38,14 +38,13 @@
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
 
-    /* Styles for the clean PDF clone – no buttons, no dropdowns, compact */
+    /* Styles for the clean PDF – will be applied when generating PDF content */
     .pdf-timetable {
       font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
       padding: 20px;
       background: white;
     }
     .pdf-timetable .outlet-card {
-      box-shadow: none;
       border: 1px solid #ddd;
       margin-bottom: 20px;
       page-break-inside: avoid;
@@ -54,6 +53,8 @@
     .pdf-timetable .outlet-title {
       background: #f0f0f0;
       border-bottom: 1px solid #ccc;
+      padding: 10px;
+      font-weight: bold;
     }
     .pdf-timetable .week-table {
       border-collapse: collapse;
@@ -73,16 +74,6 @@
     .pdf-timetable .staff-name-cell {
       background: #f9f9f9;
       font-weight: 600;
-    }
-    .pdf-timetable .edit-staff-btn,
-    .pdf-timetable button,
-    .pdf-timetable select,
-    .pdf-timetable .footer,
-    .pdf-timetable .toolbar {
-      display: none !important;
-    }
-    .pdf-timetable .shift-text {
-      font-weight: normal;
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -235,6 +226,7 @@
     return dates;
   }
 
+  // Render the interactive UI (with selects)
   function renderAll() {
     if (!currentWeekStart) return;
     const container = document.getElementById('outletsContainer');
@@ -381,12 +373,51 @@
       if (result.assignments) assignments = result.assignments;
       saveLocal();
       renderAll();
+      const assignCount = Object.keys(assignments).length;
+      alert(`✅ Pulled from Google Sheet!\nFound ${assignCount} shift assignments for week ${currentWeekStart}.`);
       return true;
     }
     return false;
   }
 
-  // ==================== CLEAN PDF GENERATION (auto‑pull first) ====================
+  // ==================== BUILD CLEAN PDF HTML FROM DATA ====================
+  function buildPDFHTML() {
+    const weekDates = getWeekDates(new Date(currentWeekStart));
+    const headerLabels = weekDates.map(d => `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]}, ${formatDateShort(d)}`);
+    
+    let html = `<div class="pdf-timetable">
+      <h2 style="text-align:center;">Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
+    
+    for (let outlet of OUTLETS) {
+      const staffList = staffPerStore[outlet.id] || [];
+      html += `<div class="outlet-card">
+        <div class="outlet-title">${outlet.name} (${outlet.hours})</div>
+        <table class="week-table">
+          <thead><tr><th>Staff / Day</th>`;
+      for (let label of headerLabels) {
+        html += `<th>${label}</th>`;
+      }
+      html += `</tr></thead><tbody>`;
+      
+      for (let staff of staffList) {
+        html += `<tr><td class="staff-name-cell">${staff}</td>`;
+        for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+          const shift = getAssignment(currentWeekStart, outlet.id, staff, dayIdx);
+          let display = "";
+          if (shift === "morning") display = outlet.shiftTimes.morning;
+          else if (shift === "afternoon") display = outlet.shiftTimes.afternoon;
+          else if (shift === "full") display = "Full Day";
+          else display = "— Off —";
+          html += `<td>${display}</td>`;
+        }
+        html += `</tr>`;
+      }
+      html += `</tbody></table></div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
   async function downloadCleanPDF() {
     const pdfBtn = document.getElementById('pdfBtn');
     const originalText = pdfBtn.innerText;
@@ -404,49 +435,11 @@
     
     pdfBtn.innerText = "⏳ Generating PDF...";
     
-    // Now generate PDF from the updated data
-    const originalContainer = document.getElementById('outletsContainer');
-    if (!originalContainer || originalContainer.children.length === 0) {
-      alert("No timetable data to export.");
-      pdfBtn.innerText = originalText;
-      pdfBtn.disabled = false;
-      return;
-    }
-
-    const clone = originalContainer.cloneNode(true);
-    
-    // Remove edit buttons
-    const editButtons = clone.querySelectorAll('.edit-staff-btn');
-    editButtons.forEach(btn => btn.remove());
-    
-    // Replace selects with text
-    const selects = clone.querySelectorAll('select');
-    selects.forEach(select => {
-      const selectedOption = select.options[select.selectedIndex];
-      const text = selectedOption ? selectedOption.textContent : "— Off —";
-      const span = document.createElement('span');
-      span.className = 'shift-text';
-      span.textContent = text;
-      select.parentNode.replaceChild(span, select);
-    });
-    
-    // Remove the extra info row (optional)
-    const extraInfoDivs = clone.querySelectorAll('.outlet-title + div');
-    extraInfoDivs.forEach(div => {
-      if (div.style.fontSize === '0.7rem') div.remove();
-    });
-    
-    const pdfContainer = document.createElement('div');
-    pdfContainer.className = 'pdf-timetable';
-    pdfContainer.appendChild(clone);
-    
-    const title = document.createElement('h2');
-    title.textContent = `Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}`;
-    title.style.textAlign = 'center';
-    title.style.marginBottom = '20px';
-    pdfContainer.insertBefore(title, pdfContainer.firstChild);
-    
-    document.body.appendChild(pdfContainer);
+    // Build fresh HTML from current data
+    const pdfHTML = buildPDFHTML();
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = pdfHTML;
+    document.body.appendChild(tempDiv);
     
     try {
       const opt = {
@@ -456,14 +449,14 @@
         html2canvas:  { scale: 2, letterRendering: true, useCORS: true, logging: false },
         jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
       };
-      await html2pdf().set(opt).from(pdfContainer).save();
+      await html2pdf().set(opt).from(tempDiv).save();
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF. Please try again.");
     } finally {
       pdfBtn.innerText = originalText;
       pdfBtn.disabled = false;
-      document.body.removeChild(pdfContainer);
+      document.body.removeChild(tempDiv);
     }
   }
 
