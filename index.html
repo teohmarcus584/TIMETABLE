@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Multi‑Page PDF</title>
+  <title>Weekly Timetable | Full Width PDF (No Cut‑off)</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -39,37 +39,39 @@
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
 
-    /* Compact PDF styles – allows multiple pages */
+    /* PDF styles – full width, no cut-off */
     .pdf-timetable {
       font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
-      padding: 8px;
       background: white;
+      padding: 10px;
+      width: fit-content;
+      min-width: 100%;
     }
     .pdf-timetable h2 {
-      font-size: 16px;
-      margin: 0 0 8px 0;
+      font-size: 18px;
+      margin: 0 0 15px;
       text-align: center;
     }
     .pdf-timetable .outlet-card {
       border: 1px solid #aaa;
-      margin-bottom: 12px;
-      /* No page-break-inside: avoid – allow breaking across pages if needed */
+      margin-bottom: 15px;
+      width: 100%;
     }
     .pdf-timetable .outlet-title {
       background: #f0f0f0;
-      padding: 5px 8px;
+      padding: 8px 12px;
       font-weight: bold;
-      font-size: 12px;
+      font-size: 14px;
     }
     .pdf-timetable .week-table {
       border-collapse: collapse;
       width: 100%;
-      font-size: 9px;
+      font-size: 10px;
     }
     .pdf-timetable .week-table th,
     .pdf-timetable .week-table td {
       border: 1px solid #aaa;
-      padding: 3px 5px;
+      padding: 6px 8px;
       text-align: left;
       vertical-align: top;
     }
@@ -81,17 +83,15 @@
       background: #f9f9f9;
       font-weight: 600;
     }
-    .pdf-timetable .shift-text {
-      font-size: 8px;
-    }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Multi‑Page PDF</h1>
+    <h1>🗓️ Staff Timetable · Full Width PDF (No Cut‑off)</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -103,7 +103,7 @@
     <div class="toolbar">
       <div>
         <button id="pushBtn" class="google">📤 Submit</button>
-        <button id="pdfBtn" class="pdf">📄 Download PDF</button>
+        <button id="pdfBtn" class="pdf">📄 Download PDF (Full Width)</button>
       </div>
       <div>
         <button id="resetBtn" class="danger">⚠️ Reset all data</button>
@@ -117,7 +117,7 @@
     🔄 <strong>Flexible OFF</strong>: Morning ↔ Afternoon, Full ↔ Off (auto‑pairing).<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes.<br>
     🎛️ <strong>Custom shift</strong> – select "Custom..." and enter your own start/end times (24‑hour format).<br>
-    📄 <strong>PDF will generate as many pages as needed</strong> – no content is cut off.
+    📄 <strong>PDF now fits the entire timetable width</strong> – no more cut‑off.
   </div>
 </div>
 
@@ -134,7 +134,7 @@
   </div>
 </div>
 
-<!-- Custom Shift Modal (24‑hour format) -->
+<!-- Custom Shift Modal -->
 <div id="customShiftModal" class="modal" style="display:none;">
   <div class="modal-content">
     <h3>⏰ Custom Shift (24‑hour format)</h3>
@@ -553,18 +553,26 @@
     }
   }
 
-  // ==================== PDF GENERATION (MULTI‑PAGE) ====================
-  function buildPDFHTML() {
+  // ==================== PDF GENERATION (NO CUT‑OFF) ====================
+  async function downloadFullWidthPDF() {
+    const pdfBtn = document.getElementById('pdfBtn');
+    const originalText = pdfBtn.innerText;
+    pdfBtn.innerText = "⏳ Loading data...";
+    pdfBtn.disabled = true;
+    await pullFromSheet(false);
+    pdfBtn.innerText = "⏳ Building PDF...";
+    
+    // Build the PDF HTML content as before
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
-    let html = `<div class="pdf-timetable"><h2>Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
+    let htmlContent = `<div class="pdf-timetable"><h2>Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
     for (let outlet of OUTLETS) {
       const staffList = staffPerStore[outlet.id] || [];
-      html += `<div class="outlet-card"><div class="outlet-title">${outlet.name} (${outlet.hours})</div><table class="week-table"><thead><tr><th>Staff / Day</th>`;
-      for (let label of headerLabels) html += `<th>${label}</th>`;
-      html += `</thead><tbody>`;
+      htmlContent += `<div class="outlet-card"><div class="outlet-title">${outlet.name} (${outlet.hours})</div><table class="week-table"><thead><tr><th>Staff / Day</th>`;
+      for (let label of headerLabels) htmlContent += `<th>${label}</th>`;
+      htmlContent += `</thead><tbody>`;
       for (let staff of staffList) {
-        html += `<tr><td class="staff-name-cell">${staff}</td>`;
+        htmlContent += `<tr><td class="staff-name-cell">${staff}</td>`;
         for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
           const shift = getAssignment(currentWeekStart, outlet.id, staff, dayIdx);
           let display = "";
@@ -573,38 +581,45 @@
           else if (shift === "full") display = "Full Day";
           else if (isCustomShift(shift)) display = getCustomDisplay(shift);
           else display = "— Off —";
-          html += `<td><span class="shift-text">${display}</span></td>`;
+          htmlContent += `<td><span class="shift-text">${display}</span></td>`;
         }
-        html += `</tr>`;
+        htmlContent += `</tr>`;
       }
-      html += `</tbody></table></div>`;
+      htmlContent += `</tbody></table></div>`;
     }
-    html += `</div>`;
-    return html;
-  }
+    htmlContent += `</div>`;
 
-  async function downloadCleanPDF() {
-    const pdfBtn = document.getElementById('pdfBtn');
-    const originalText = pdfBtn.innerText;
-    pdfBtn.innerText = "⏳ Fetching data...";
-    pdfBtn.disabled = true;
-    await pullFromSheet(false);
-    pdfBtn.innerText = "⏳ Generating PDF...";
-    const pdfHTML = buildPDFHTML();
+    // Create a temporary container to render the PDF content
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = pdfHTML;
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.top = '-9999px';
+    tempDiv.innerHTML = htmlContent;
     document.body.appendChild(tempDiv);
+
     try {
-      const opt = {
-        margin:        [0.3, 0.3, 0.3, 0.3],   // small margins
-        filename:     `Timetable_${currentWeekStart}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 1.5, letterRendering: true, useCORS: true, logging: false },
-        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
-      };
-      // Removed page-break-inside restrictions; html2pdf will split naturally
-      await html2pdf().set(opt).from(tempDiv).save();
-    } catch(err) {
+      // Use html2canvas to capture the content with high quality
+      const canvas = await html2canvas(tempDiv, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const { jsPDF } = window.jspdf;
+      // Calculate PDF dimensions: width = canvas.width * (1 inch / 96 dpi) but we set custom width
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      // Set PDF page size to match the canvas width and height (in mm or points)
+      // Use 'px' as unit? jspdf uses mm by default.
+      const pdf = new jsPDF({
+        unit: 'px',
+        format: [imgWidth, imgHeight],
+        orientation: imgWidth > imgHeight ? 'landscape' : 'portrait'
+      });
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+      pdf.save(`Timetable_${currentWeekStart}.pdf`);
+    } catch (err) {
       alert("PDF generation failed: " + err);
     } finally {
       pdfBtn.innerText = originalText;
@@ -636,7 +651,7 @@
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
   document.getElementById('resetWeekBtn').addEventListener('click', resetToComingMonday);
   document.getElementById('pushBtn').onclick = pushToSheet;
-  document.getElementById('pdfBtn').onclick = downloadCleanPDF;
+  document.getElementById('pdfBtn').onclick = downloadFullWidthPDF;
   document.getElementById('resetBtn').onclick = resetAll;
   document.getElementById('saveStaffModalBtn').onclick = saveStaffModal;
   document.getElementById('closeStaffModalBtn').onclick = closeStaffModal;
