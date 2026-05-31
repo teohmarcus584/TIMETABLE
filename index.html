@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | No CORS (JSONP)</title>
+  <title>Weekly Timetable | Print to PDF</title>
   <style>
+    /* Base styles (same as before) */
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
     .container { max-width: 1400px; margin: 0 auto; }
@@ -14,6 +15,7 @@
     button { background: white; border: 1px solid #cbd5e1; border-radius: 40px; padding: 8px 18px; cursor: pointer; transition: 0.2s; font-weight: 500; }
     button.primary { background: #3b82f6; border-color: #3b82f6; color: white; }
     button.google { background: #0f9d58; border-color: #0f9d58; color: white; }
+    button.pdf { background: #dc2626; border-color: #dc2626; color: white; }
     button.danger { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
     button.small { padding: 4px 12px; font-size: 0.8rem; }
     button:hover { transform: translateY(-1px); filter: brightness(0.97); }
@@ -36,25 +38,37 @@
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
+
+    /* Print styles – for PDF export */
+    @media print {
+      body { background: white; padding: 0; margin: 0; }
+      .toolbar, .week-selector, .footer, .edit-staff-btn, .modal, .header button, .header .toolbar, .header .week-selector { display: none !important; }
+      .outlet-card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; page-break-inside: avoid; }
+      .week-table th, .week-table td { border: 1px solid #ccc; }
+      select { -webkit-appearance: none; appearance: none; border: none; background: transparent; font-weight: normal; }
+      .staff-name-cell { background: #f0f0f0; }
+      .header { background: none; box-shadow: none; padding: 10px 0; }
+      h1 { font-size: 1.5rem; }
+    }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · No CORS (JSONP)</h1>
+    <h1>🗓️ Staff Timetable · Morning / Afternoon / Full Shift</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
       <input type="date" id="weekStartPicker" value="">
-      <button id="generateBtn" class="primary">🔄 Generate Timetable</button>
       <span id="weekRangeDisplay" style="font-size:0.9rem; color:#475569;"></span>
     </div>
     <div class="toolbar">
       <div>
-        <button id="pushBtn" class="google">📤 Push to Google Sheet</button>
         <button id="pullBtn" class="google">📥 Pull from Google Sheet</button>
+        <button id="pdfBtn" class="pdf">📄 Generate PDF</button>
       </div>
       <div>
+        <button id="pushBtn" class="google">📤 Push to Google Sheet</button>
         <button id="exportBtn" class="primary">💾 Export JSON</button>
         <button id="importBtn">📂 Import JSON</button>
         <input type="file" id="importFile" accept=".json" style="display:none">
@@ -66,7 +80,7 @@
   <div id="outletsContainer"></div>
   <div class="footer">
     📌 Each outlet has its own staff list. Click "Edit Staff" on any outlet to change.<br>
-    🔄 Using JSONP – no CORS errors.
+    🖨️ Click "Generate PDF" to save the current timetable as a PDF document.
   </div>
 </div>
 
@@ -85,7 +99,7 @@
 
 <script>
   // ==================== YOUR SCRIPT URL ====================
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySlVVBl8kFStvQA4Wb2DZovIXkEw6YGiCXfz54_iyR0ZbL63izjiJ5dtls4IFQq6nNUw/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbySlVVBl8kFStvQA4Wb2DZovIXkEw6YGiCXfz54_iyR0ZbL63izjiJ5dtls4IFQq6nNUw/exec'; // ⚠️ REPLACE WITH YOUR URL
   // ========================================================
 
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -301,8 +315,8 @@
   }
 
   async function callScript(action, data = {}) {
-    if (!SCRIPT_URL) {
-      alert("Google Sheets URL is not set.");
+    if (!SCRIPT_URL || SCRIPT_URL.includes('YOUR_SCRIPT_ID')) {
+      alert("Please replace 'YOUR_SCRIPT_ID' in the SCRIPT_URL constant with your actual Google Apps Script URL.");
       return null;
     }
     try {
@@ -336,8 +350,13 @@
     }
   }
 
-  async function generateTimetable() {
-    await pullFromSheet();
+  // PDF generation: just trigger print with custom title
+  function generatePDF() {
+    // Save original title
+    const originalTitle = document.title;
+    document.title = `Timetable_${currentWeekStart}`;
+    window.print();
+    document.title = originalTitle;
   }
 
   function exportJSON() {
@@ -380,9 +399,9 @@
   renderAll();
 
   document.getElementById('weekStartPicker').addEventListener('change', setWeekFromPicker);
-  document.getElementById('generateBtn').addEventListener('click', generateTimetable);
-  document.getElementById('pushBtn').onclick = pushToSheet;
   document.getElementById('pullBtn').onclick = pullFromSheet;
+  document.getElementById('pdfBtn').onclick = generatePDF;
+  document.getElementById('pushBtn').onclick = pushToSheet;
   document.getElementById('exportBtn').onclick = exportJSON;
   document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
   document.getElementById('importFile').onchange = e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; };
