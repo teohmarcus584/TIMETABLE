@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | One‑Page PDF</title>
+  <title>Weekly Timetable | Custom Shift</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -38,55 +38,15 @@
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
-
-    /* --- Compact styles for PDF (single page) --- */
-    .pdf-timetable {
-      font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
-      padding: 10px;
-      background: white;
-    }
-    .pdf-timetable h2 {
-      font-size: 18px;
-      margin: 0 0 10px 0;
-      text-align: center;
-    }
-    .pdf-timetable .outlet-card {
-      border: 1px solid #ccc;
-      margin-bottom: 12px;
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-    .pdf-timetable .outlet-title {
-      background: #f0f0f0;
-      padding: 6px 10px;
-      font-weight: bold;
-      font-size: 14px;
-    }
-    .pdf-timetable .week-table {
-      border-collapse: collapse;
-      width: 100%;
-      font-size: 10px;
-    }
-    .pdf-timetable .week-table th,
-    .pdf-timetable .week-table td {
-      border: 1px solid #ccc;
-      padding: 4px 6px;
-      text-align: left;
-      vertical-align: top;
-    }
-    .pdf-timetable .week-table th {
-      background: #eaeef2;
-      font-weight: bold;
-      font-size: 10px;
-    }
-    .pdf-timetable .staff-name-cell {
-      background: #f9f9f9;
-      font-weight: 600;
-      font-size: 10px;
-    }
-    .pdf-timetable .shift-text {
-      font-size: 9px;
-    }
+    .pdf-timetable { font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; padding: 10px; background: white; }
+    .pdf-timetable h2 { font-size: 18px; margin: 0 0 10px 0; text-align: center; }
+    .pdf-timetable .outlet-card { border: 1px solid #ccc; margin-bottom: 12px; page-break-inside: avoid; break-inside: avoid; }
+    .pdf-timetable .outlet-title { background: #f0f0f0; padding: 6px 10px; font-weight: bold; font-size: 14px; }
+    .pdf-timetable .week-table { border-collapse: collapse; width: 100%; font-size: 10px; }
+    .pdf-timetable .week-table th, .pdf-timetable .week-table td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; }
+    .pdf-timetable .week-table th { background: #eaeef2; font-weight: bold; font-size: 10px; }
+    .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; font-size: 10px; }
+    .pdf-timetable .shift-text { font-size: 9px; }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -94,8 +54,8 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · One‑Page PDF</h1>
-    <div>Select any date → automatically shows the week starting on Monday</div>
+    <h1>🗓️ Staff Timetable · Custom Shift</h1>
+    <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
       <input type="date" id="weekStartPicker" value="">
@@ -119,6 +79,7 @@
     📌 Each outlet has its own staff list. Click "Edit Staff" or "Flexible" on any outlet.<br>
     🔄 <strong>Flexible OFF</strong> (default): Morning → next staff gets Afternoon; Afternoon → previous staff gets Morning; Full Day → next staff gets Off; Off → next staff gets Full Day.<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes – full manual control.<br>
+    🎛️ <strong>Custom shift</strong> – select "Custom" and enter your own start/end times.<br>
     🚀 <strong>Auto‑pull</strong>: when you change the week, it loads data from Google Sheets automatically.<br>
     📅 <strong>Week always starts on Monday</strong> (Mon → Tue → Wed → Thu → Fri → Sat → Sun).<br>
     🖨️ <strong>PDF is optimised to fit all three outlets on a single landscape page.</strong>
@@ -138,9 +99,28 @@
   </div>
 </div>
 
+<!-- Custom Shift Modal -->
+<div id="customShiftModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h3>⏰ Custom Shift</h3>
+    <div class="filter-group">
+      <label>Start Time</label>
+      <input type="time" id="customStartTime" step="60" value="09:00">
+    </div>
+    <div class="filter-group">
+      <label>End Time</label>
+      <input type="time" id="customEndTime" step="60" value="17:00">
+    </div>
+    <div class="modal-buttons">
+      <button id="confirmCustomBtn" class="modal-btn modal-btn-primary">Apply</button>
+      <button id="cancelCustomBtn" class="modal-btn modal-btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ==================== YOUR SCRIPT URL ====================
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzp8nkgSQiB2cuCEoC_FjxESlQYAmiFKr_Ua0MVn4HKqBzA-UAoC96smtYlr0SsFSA6zQ/exec'; // ⚠️ REPLACE WITH YOUR URL
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzqR0cp6li92rDnFllBLsSEk6tOZr5YvkyQYt6l1yo6xbBsBCpW-eRH1vY4F_5YiETgjw/exec'; // ⚠️ REPLACE WITH YOUR URL
   // ========================================================
 
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -202,6 +182,11 @@
   function getKey(weekStart, outletId, staff, dayIdx) { return `${weekStart}|${outletId}|${staff}|${dayIdx}`; }
   function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
 
+  // Helper to check if a shift value is custom (starts with "custom:")
+  function isCustomShift(value) { return value && value.startsWith("custom:"); }
+  function getCustomDisplay(value) { return value.replace("custom:", ""); }
+  function createCustomValue(start, end) { return `custom:${start} – ${end}`; }
+
   function setAssignment(weekStart, outletId, staff, dayIdx, value, skipAuto = false) {
     const key = getKey(weekStart, outletId, staff, dayIdx);
     if (!value) delete assignments[key];
@@ -209,6 +194,7 @@
     saveLocal();
     renderAll();
 
+    // Auto-pairing only for standard shifts (morning, afternoon, full, off) – not for custom
     if (!skipAuto && !flexibleMode[outletId]) {
       const staffList = staffPerStore[outletId] || [];
       if (staffList.length < 2) return;
@@ -249,6 +235,7 @@
           renderAll();
         }
       }
+      // custom shifts do not trigger auto-pairing
     }
   }
 
@@ -295,6 +282,37 @@
       dates.push(d);
     }
     return dates;
+  }
+
+  // Global variables for custom shift modal
+  let pendingCustomShift = null; // { outlet, staff, dayIdx }
+
+  function showCustomShiftModal(outlet, staff, dayIdx) {
+    pendingCustomShift = { outlet, staff, dayIdx };
+    document.getElementById('customStartTime').value = "09:00";
+    document.getElementById('customEndTime').value = "17:00";
+    document.getElementById('customShiftModal').style.display = 'flex';
+  }
+
+  function applyCustomShift() {
+    if (!pendingCustomShift) return;
+    const start = document.getElementById('customStartTime').value;
+    const end = document.getElementById('customEndTime').value;
+    if (!start || !end) {
+      alert("Please enter both start and end times.");
+      return;
+    }
+    const customValue = createCustomValue(start, end);
+    setAssignment(currentWeekStart, pendingCustomShift.outlet.id, pendingCustomShift.staff, pendingCustomShift.dayIdx, customValue, false);
+    document.getElementById('customShiftModal').style.display = 'none';
+    pendingCustomShift = null;
+  }
+
+  function cancelCustomShift() {
+    document.getElementById('customShiftModal').style.display = 'none';
+    pendingCustomShift = null;
+    // Refresh the select to show previous value (by re-rendering)
+    renderAll();
   }
 
   function renderAll() {
@@ -356,11 +374,39 @@
           const cell = document.createElement('td');
           const current = getAssignment(currentWeekStart, outlet.id, staff, dayIdx);
           const select = document.createElement('select');
+          // Off option
           const offOpt = document.createElement('option'); offOpt.value = ""; offOpt.textContent = "— Off —"; if (current === "") offOpt.selected = true; select.appendChild(offOpt);
+          // Morning
           const mornOpt = document.createElement('option'); mornOpt.value = "morning"; mornOpt.textContent = `🌅 Morning (${outlet.shiftTimes.morning})`; if (current === "morning") mornOpt.selected = true; select.appendChild(mornOpt);
+          // Afternoon
           const aftOpt = document.createElement('option'); aftOpt.value = "afternoon"; aftOpt.textContent = `🌙 Afternoon (${outlet.shiftTimes.afternoon})`; if (current === "afternoon") aftOpt.selected = true; select.appendChild(aftOpt);
+          // Full Day
           const fullOpt = document.createElement('option'); fullOpt.value = "full"; fullOpt.textContent = `🌞 Full Day (${outlet.shiftTimes.full})`; if (current === "full") fullOpt.selected = true; select.appendChild(fullOpt);
-          select.addEventListener('change', ((o, s, d) => () => setAssignment(currentWeekStart, o.id, s, d, select.value, false))(outlet, staff, dayIdx));
+          // Custom option
+          const customOpt = document.createElement('option'); customOpt.value = "__CUSTOM__"; customOpt.textContent = `🎛️ Custom...`; select.appendChild(customOpt);
+          // If current value is custom, display it as a separate option (but we can't select it from list, we'll show a placeholder)
+          if (isCustomShift(current)) {
+            const customDisplay = getCustomDisplay(current);
+            const customPlaceholder = document.createElement('option');
+            customPlaceholder.value = current;
+            customPlaceholder.textContent = `🕒 Custom: ${customDisplay}`;
+            customPlaceholder.selected = true;
+            select.appendChild(customPlaceholder);
+          }
+          select.addEventListener('change', (function(o, s, d, sel) {
+            return function() {
+              if (sel.value === "__CUSTOM__") {
+                showCustomShiftModal(o, s, d);
+                // Reset select to previous value (to be replaced after modal)
+                setTimeout(() => {
+                  const currentVal = getAssignment(currentWeekStart, o.id, s, d);
+                  sel.value = currentVal || "";
+                }, 50);
+              } else {
+                setAssignment(currentWeekStart, o.id, s, d, sel.value, false);
+              }
+            };
+          })(outlet, staff, dayIdx, select));
           cell.appendChild(select);
           row.appendChild(cell);
         }
@@ -496,7 +542,7 @@
     }
   }
 
-  // ==================== PDF GENERATION (optimised for one page) ====================
+  // ==================== PDF GENERATION ====================
   function buildPDFHTML() {
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
@@ -517,6 +563,7 @@
           if (shift === "morning") display = outlet.shiftTimes.morning;
           else if (shift === "afternoon") display = outlet.shiftTimes.afternoon;
           else if (shift === "full") display = "Full Day";
+          else if (isCustomShift(shift)) display = getCustomDisplay(shift);
           else display = "— Off —";
           html += `<td><span class="shift-text">${display}</span></td>`;
         }
@@ -541,7 +588,7 @@
     document.body.appendChild(tempDiv);
     try {
       const opt = {
-        margin:        [0.2, 0.2, 0.2, 0.2],   // small margins (top, right, bottom, left) in inches
+        margin:        [0.2, 0.2, 0.2, 0.2],
         filename:     `Timetable_${currentWeekStart}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 1.8, letterRendering: true, useCORS: true, logging: false },
@@ -586,6 +633,10 @@
   document.getElementById('saveStaffModalBtn').onclick = saveStaffModal;
   document.getElementById('closeStaffModalBtn').onclick = closeStaffModal;
   document.getElementById('editStaffModal').addEventListener('click', (e) => { if(e.target === document.getElementById('editStaffModal')) closeStaffModal(); });
+  document.getElementById('confirmCustomBtn').addEventListener('click', applyCustomShift);
+  document.getElementById('cancelCustomBtn').addEventListener('click', cancelCustomShift);
+  // Close modal on background click
+  document.getElementById('customShiftModal').addEventListener('click', (e) => { if(e.target === document.getElementById('customShiftModal')) cancelCustomShift(); });
 
   init();
 </script>
