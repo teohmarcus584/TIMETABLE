@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Share PDF via Email</title>
+  <title>Weekly Timetable | Time‑Based Shift Selector</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -61,7 +61,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Share PDF</h1>
+    <h1>🗓️ Staff Timetable · Time‑Based Shifts</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -87,8 +87,8 @@
     📌 Each outlet has its own staff list. Click "Edit Staff" or "Flexible" on any outlet.<br>
     🔄 <strong>Flexible OFF</strong>: Morning ↔ Afternoon, Full ↔ Off (auto‑pairing).<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes.<br>
-    🎛️ <strong>Custom shift</strong> – select "Custom..." and enter your own start/end times (24‑hour format).<br>
-    📄 <strong>Share PDF</strong> opens iOS Share Sheet → choose Mail, Messages, etc.
+    🎛️ <strong>Custom shift</strong> – select "🎛️ Custom..." and enter your own start/end times (24‑hour format).<br>
+    🕒 <strong>Dropdown shows actual time ranges</strong> (e.g., "10:00 – 16:00") instead of "Morning".
   </div>
 </div>
 
@@ -375,19 +375,36 @@
           const cell = document.createElement('td');
           const current = getAssignment(currentWeekStart, outlet.id, staff, dayIdx);
           const select = document.createElement('select');
+          
+          // Off
           const offOpt = document.createElement('option'); offOpt.value = ""; offOpt.textContent = "— Off —"; if (current === "") offOpt.selected = true; select.appendChild(offOpt);
-          const mornOpt = document.createElement('option'); mornOpt.value = "morning"; mornOpt.textContent = `🌅 Morning (${outlet.shiftTimes.morning})`; if (current === "morning") mornOpt.selected = true; select.appendChild(mornOpt);
-          const aftOpt = document.createElement('option'); aftOpt.value = "afternoon"; aftOpt.textContent = `🌙 Afternoon (${outlet.shiftTimes.afternoon})`; if (current === "afternoon") aftOpt.selected = true; select.appendChild(aftOpt);
-          const fullOpt = document.createElement('option'); fullOpt.value = "full"; fullOpt.textContent = `🌞 Full Day (${outlet.shiftTimes.full})`; if (current === "full") fullOpt.selected = true; select.appendChild(fullOpt);
-          const customOpt = document.createElement('option'); customOpt.value = "__CUSTOM__"; customOpt.textContent = `🎛️ Custom...`; select.appendChild(customOpt);
+          // Morning – show actual time range
+          const mornOpt = document.createElement('option'); mornOpt.value = "morning"; mornOpt.textContent = outlet.shiftTimes.morning; if (current === "morning") mornOpt.selected = true; select.appendChild(mornOpt);
+          // Afternoon – show actual time range
+          const aftOpt = document.createElement('option'); aftOpt.value = "afternoon"; aftOpt.textContent = outlet.shiftTimes.afternoon; if (current === "afternoon") aftOpt.selected = true; select.appendChild(aftOpt);
+          // Full Day
+          const fullOpt = document.createElement('option'); fullOpt.value = "full"; fullOpt.textContent = "Full Day"; if (current === "full") fullOpt.selected = true; select.appendChild(fullOpt);
+          // Custom option – show "🎛️ Custom..." or the actual custom time if already set
+          const customOpt = document.createElement('option'); customOpt.value = "__CUSTOM__"; 
           if (isCustomShift(current)) {
+            // If a custom shift is currently set, we need a way to show it but the value must be the custom string.
+            // We'll create a separate option for the current custom value and mark it selected.
             const customDisplay = getCustomDisplay(current);
-            const customPlaceholder = document.createElement('option');
-            customPlaceholder.value = current;
-            customPlaceholder.textContent = `🕒 Custom: ${customDisplay}`;
-            customPlaceholder.selected = true;
-            select.appendChild(customPlaceholder);
+            const customCurrentOpt = document.createElement('option');
+            customCurrentOpt.value = current;
+            customCurrentOpt.textContent = customDisplay;
+            customCurrentOpt.selected = true;
+            select.appendChild(customCurrentOpt);
+            // Also add the "Custom..." option to allow changing it
+            const changeOpt = document.createElement('option');
+            changeOpt.value = "__CUSTOM__";
+            changeOpt.textContent = "🎛️ Change Custom...";
+            select.appendChild(changeOpt);
+          } else {
+            customOpt.textContent = "🎛️ Custom...";
+            select.appendChild(customOpt);
           }
+          
           select.addEventListener('change', (function(o, s, d, sel) {
             return function() {
               if (sel.value === "__CUSTOM__") {
@@ -524,9 +541,8 @@
     }
   }
 
-  // ==================== PDF GENERATION (Full Width) ====================
+  // ==================== PDF GENERATION ====================
   async function generatePDFBlob() {
-    // Build the PDF HTML content
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
     let htmlContent = `<div class="pdf-timetable"><h2>Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
@@ -547,13 +563,12 @@
           else display = "— Off —";
           htmlContent += `<td><span class="shift-text">${display}</span></td>`;
         }
-        htmlContent += `</tr>`;
+        htmlContent += `</table>`;
       }
       htmlContent += `</tbody></table></div>`;
     }
     htmlContent += `</div>`;
 
-    // Create temporary container
     const tempDiv = document.createElement('div');
     tempDiv.style.position = 'absolute';
     tempDiv.style.left = '-9999px';
@@ -568,8 +583,7 @@
       const imgHeight = canvas.height;
       const pdf = new jsPDF({ unit: 'px', format: [imgWidth, imgHeight], orientation: imgWidth > imgHeight ? 'landscape' : 'portrait' });
       pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-      const pdfBlob = pdf.output('blob');
-      return pdfBlob;
+      return pdf.output('blob');
     } finally {
       document.body.removeChild(tempDiv);
     }
