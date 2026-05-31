@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | 24‑Hour Custom Shift</title>
+  <title>Weekly Timetable | Multi‑Page PDF</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -38,15 +38,52 @@
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
-    .pdf-timetable { font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; padding: 10px; background: white; }
-    .pdf-timetable h2 { font-size: 18px; margin: 0 0 10px 0; text-align: center; }
-    .pdf-timetable .outlet-card { border: 1px solid #ccc; margin-bottom: 12px; page-break-inside: avoid; break-inside: avoid; }
-    .pdf-timetable .outlet-title { background: #f0f0f0; padding: 6px 10px; font-weight: bold; font-size: 14px; }
-    .pdf-timetable .week-table { border-collapse: collapse; width: 100%; font-size: 10px; }
-    .pdf-timetable .week-table th, .pdf-timetable .week-table td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; }
-    .pdf-timetable .week-table th { background: #eaeef2; font-weight: bold; font-size: 10px; }
-    .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; font-size: 10px; }
-    .pdf-timetable .shift-text { font-size: 9px; }
+
+    /* Compact PDF styles – allows multiple pages */
+    .pdf-timetable {
+      font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
+      padding: 8px;
+      background: white;
+    }
+    .pdf-timetable h2 {
+      font-size: 16px;
+      margin: 0 0 8px 0;
+      text-align: center;
+    }
+    .pdf-timetable .outlet-card {
+      border: 1px solid #aaa;
+      margin-bottom: 12px;
+      /* No page-break-inside: avoid – allow breaking across pages if needed */
+    }
+    .pdf-timetable .outlet-title {
+      background: #f0f0f0;
+      padding: 5px 8px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .pdf-timetable .week-table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 9px;
+    }
+    .pdf-timetable .week-table th,
+    .pdf-timetable .week-table td {
+      border: 1px solid #aaa;
+      padding: 3px 5px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .pdf-timetable .week-table th {
+      background: #eaeef2;
+      font-weight: bold;
+    }
+    .pdf-timetable .staff-name-cell {
+      background: #f9f9f9;
+      font-weight: 600;
+    }
+    .pdf-timetable .shift-text {
+      font-size: 8px;
+    }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -54,7 +91,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · 24‑Hour Custom Shift</h1>
+    <h1>🗓️ Staff Timetable · Multi‑Page PDF</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -80,7 +117,7 @@
     🔄 <strong>Flexible OFF</strong>: Morning ↔ Afternoon, Full ↔ Off (auto‑pairing).<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes.<br>
     🎛️ <strong>Custom shift</strong> – select "Custom..." and enter your own start/end times (24‑hour format).<br>
-    ✅ "Off" is correctly stored as empty – never becomes "custom off".
+    📄 <strong>PDF will generate as many pages as needed</strong> – no content is cut off.
   </div>
 </div>
 
@@ -181,7 +218,7 @@
   function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
 
   function isCustomShift(value) { return value && value.startsWith("custom:"); }
-  function getCustomDisplay(value) { return value.substring(7); } // remove "custom:"
+  function getCustomDisplay(value) { return value.substring(7); }
   function createCustomValue(start, end) { return `custom:${start} – ${end}`; }
 
   function setAssignment(weekStart, outletId, staff, dayIdx, value, skipAuto = false) {
@@ -191,7 +228,6 @@
     saveLocal();
     renderAll();
 
-    // Auto-pairing only for standard shifts
     if (!skipAuto && !flexibleMode[outletId]) {
       const staffList = staffPerStore[outletId] || [];
       if (staffList.length < 2) return;
@@ -306,7 +342,7 @@
   function cancelCustomShift() {
     document.getElementById('customShiftModal').style.display = 'none';
     pendingCustomShift = null;
-    renderAll(); // refresh select to previous value
+    renderAll();
   }
 
   function renderAll() {
@@ -368,17 +404,11 @@
           const cell = document.createElement('td');
           const current = getAssignment(currentWeekStart, outlet.id, staff, dayIdx);
           const select = document.createElement('select');
-          // Off
           const offOpt = document.createElement('option'); offOpt.value = ""; offOpt.textContent = "— Off —"; if (current === "") offOpt.selected = true; select.appendChild(offOpt);
-          // Morning
           const mornOpt = document.createElement('option'); mornOpt.value = "morning"; mornOpt.textContent = `🌅 Morning (${outlet.shiftTimes.morning})`; if (current === "morning") mornOpt.selected = true; select.appendChild(mornOpt);
-          // Afternoon
           const aftOpt = document.createElement('option'); aftOpt.value = "afternoon"; aftOpt.textContent = `🌙 Afternoon (${outlet.shiftTimes.afternoon})`; if (current === "afternoon") aftOpt.selected = true; select.appendChild(aftOpt);
-          // Full Day
           const fullOpt = document.createElement('option'); fullOpt.value = "full"; fullOpt.textContent = `🌞 Full Day (${outlet.shiftTimes.full})`; if (current === "full") fullOpt.selected = true; select.appendChild(fullOpt);
-          // Custom option
           const customOpt = document.createElement('option'); customOpt.value = "__CUSTOM__"; customOpt.textContent = `🎛️ Custom...`; select.appendChild(customOpt);
-          // If current value is custom, add a display option
           if (isCustomShift(current)) {
             const customDisplay = getCustomDisplay(current);
             const customPlaceholder = document.createElement('option');
@@ -391,7 +421,6 @@
             return function() {
               if (sel.value === "__CUSTOM__") {
                 showCustomShiftModal(o, s, d);
-                // Reset select to previous value after modal (to be replaced)
                 setTimeout(() => {
                   const curr = getAssignment(currentWeekStart, o.id, s, d);
                   sel.value = curr || "";
@@ -524,7 +553,7 @@
     }
   }
 
-  // ==================== PDF ====================
+  // ==================== PDF GENERATION (MULTI‑PAGE) ====================
   function buildPDFHTML() {
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
@@ -566,10 +595,22 @@
     tempDiv.innerHTML = pdfHTML;
     document.body.appendChild(tempDiv);
     try {
-      const opt = { margin: [0.2,0.2,0.2,0.2], filename: `Timetable_${currentWeekStart}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 1.8 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' } };
+      const opt = {
+        margin:        [0.3, 0.3, 0.3, 0.3],   // small margins
+        filename:     `Timetable_${currentWeekStart}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 1.5, letterRendering: true, useCORS: true, logging: false },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+      };
+      // Removed page-break-inside restrictions; html2pdf will split naturally
       await html2pdf().set(opt).from(tempDiv).save();
-    } catch(err) { alert("PDF failed: " + err); }
-    finally { pdfBtn.innerText = originalText; pdfBtn.disabled = false; document.body.removeChild(tempDiv); }
+    } catch(err) {
+      alert("PDF generation failed: " + err);
+    } finally {
+      pdfBtn.innerText = originalText;
+      pdfBtn.disabled = false;
+      document.body.removeChild(tempDiv);
+    }
   }
 
   function resetAll() {
