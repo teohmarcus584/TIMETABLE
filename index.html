@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Readable PDF for Email</title>
+  <title>Weekly Timetable | Clean PDF for Email</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -40,41 +40,43 @@
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
 
-    /* PDF styles – fixed width for better readability */
+    /* PDF styles – compact, no overflow */
     .pdf-timetable {
       font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
       background: white;
-      padding: 20px;
-      width: 1100px;  /* fixed width to ensure consistent rendering */
+      padding: 10px;
+      width: 1000px;  /* fixed width ensures consistent capture */
       margin: 0 auto;
     }
     .pdf-timetable h2 {
-      font-size: 24px;
-      margin: 0 0 20px;
+      font-size: 16px;
+      margin: 0 0 12px;
       text-align: center;
     }
     .pdf-timetable .outlet-card {
-      border: 1px solid #aaa;
-      margin-bottom: 20px;
-      page-break-inside: avoid;
+      border: 1px solid #ccc;
+      margin-bottom: 15px;
     }
     .pdf-timetable .outlet-title {
       background: #f0f0f0;
-      padding: 10px 15px;
+      padding: 6px 10px;
       font-weight: bold;
-      font-size: 18px;
+      font-size: 12px;
     }
     .pdf-timetable .week-table {
       border-collapse: collapse;
       width: 100%;
-      font-size: 12px;
+      table-layout: fixed;
     }
     .pdf-timetable .week-table th,
     .pdf-timetable .week-table td {
       border: 1px solid #aaa;
-      padding: 8px 10px;
+      padding: 4px 6px;
       text-align: left;
       vertical-align: top;
+      font-size: 8px;
+      line-height: 1.2;
+      word-break: break-word;
     }
     .pdf-timetable .week-table th {
       background: #eaeef2;
@@ -92,7 +94,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Readable PDF for Email</h1>
+    <h1>🗓️ Staff Timetable · Clean PDF for Email</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -120,7 +122,7 @@
     🔓 <strong>Flexible ON</strong>: no automatic changes.<br>
     🎛️ <strong>Custom shift</strong> – select "🎛️ Custom..." and enter your own start/end times (24‑hour format).<br>
     🕒 <strong>Dropdown shows actual time ranges</strong> (e.g., "10:00 – 16:00") instead of "Morning".<br>
-    📄 <strong>PDF is formatted for A4 landscape with readable font sizes</strong> – perfect for email.
+    📄 <strong>PDF is compact, no cut‑off, fits A4 landscape</strong> – perfect for email.
   </div>
 </div>
 
@@ -571,9 +573,9 @@
     }
   }
 
-  // ==================== PDF GENERATION (A4 Landscape, scaled to fit) ====================
+  // ==================== PDF GENERATION – COMPACT, NO CUT-OFF ====================
   async function generatePDFBlob() {
-    // Build HTML for PDF
+    // Build the PDF HTML (same as before but with compact styles already in CSS)
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
     let htmlContent = `<div class="pdf-timetable"><h2>Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
@@ -604,40 +606,40 @@
     tempDiv.style.position = 'absolute';
     tempDiv.style.left = '-9999px';
     tempDiv.style.top = '-9999px';
-    tempDiv.style.width = '1100px'; // fixed width for consistent rendering
-    tempDiv.style.background = 'white';
-    tempDiv.style.padding = '20px';
+    tempDiv.style.width = '1000px';
+    tempDiv.style.backgroundColor = 'white';
     tempDiv.innerHTML = htmlContent;
     document.body.appendChild(tempDiv);
-
     try {
+      // Render at high scale
       const canvas = await html2canvas(tempDiv, {
         scale: 2,
         backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
-        windowWidth: 1100
+        windowWidth: 1000
       });
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const { jsPDF } = window.jspdf;
       
-      // A4 landscape dimensions in mm: 297 x 210
+      // A4 landscape
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      const ratio = imgWidth / imgHeight;
-      let finalWidth = pageWidth - 20; // margins
-      let finalHeight = finalWidth / ratio;
-      if (finalHeight > pageHeight - 20) {
-        finalHeight = pageHeight - 20;
-        finalWidth = finalHeight * ratio;
+      // Fit to page width with some margin
+      const maxWidth = pageWidth - 20;
+      const maxHeight = pageHeight - 20;
+      let finalWidth = maxWidth;
+      let finalHeight = (imgHeight / imgWidth) * finalWidth;
+      if (finalHeight > maxHeight) {
+        finalHeight = maxHeight;
+        finalWidth = (imgWidth / imgHeight) * finalHeight;
       }
       const x = (pageWidth - finalWidth) / 2;
       const y = 10;
-      
       pdf.addImage(imgData, 'JPEG', x, y, finalWidth, finalHeight);
       return pdf.output('blob');
     } finally {
