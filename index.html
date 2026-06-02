@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Time‑Based Shift Selector</title>
+  <title>Weekly Timetable | Readable PDF for Email</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -39,20 +39,51 @@
     .modal-content input { width: 100%; padding: 10px; border-radius: 40px; border: 1px solid #cbd5e1; margin: 8px 0; }
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
+
+    /* PDF styles – fixed width for better readability */
     .pdf-timetable {
       font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
       background: white;
-      padding: 10px;
-      width: fit-content;
-      min-width: 100%;
+      padding: 20px;
+      width: 1100px;  /* fixed width to ensure consistent rendering */
+      margin: 0 auto;
     }
-    .pdf-timetable h2 { font-size: 18px; margin: 0 0 15px; text-align: center; }
-    .pdf-timetable .outlet-card { border: 1px solid #aaa; margin-bottom: 15px; width: 100%; }
-    .pdf-timetable .outlet-title { background: #f0f0f0; padding: 8px 12px; font-weight: bold; font-size: 14px; }
-    .pdf-timetable .week-table { border-collapse: collapse; width: 100%; font-size: 10px; }
-    .pdf-timetable .week-table th, .pdf-timetable .week-table td { border: 1px solid #aaa; padding: 6px 8px; text-align: left; vertical-align: top; }
-    .pdf-timetable .week-table th { background: #eaeef2; font-weight: bold; }
-    .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; }
+    .pdf-timetable h2 {
+      font-size: 24px;
+      margin: 0 0 20px;
+      text-align: center;
+    }
+    .pdf-timetable .outlet-card {
+      border: 1px solid #aaa;
+      margin-bottom: 20px;
+      page-break-inside: avoid;
+    }
+    .pdf-timetable .outlet-title {
+      background: #f0f0f0;
+      padding: 10px 15px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .pdf-timetable .week-table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 12px;
+    }
+    .pdf-timetable .week-table th,
+    .pdf-timetable .week-table td {
+      border: 1px solid #aaa;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .pdf-timetable .week-table th {
+      background: #eaeef2;
+      font-weight: bold;
+    }
+    .pdf-timetable .staff-name-cell {
+      background: #f9f9f9;
+      font-weight: 600;
+    }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -61,7 +92,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Time‑Based Shifts</h1>
+    <h1>🗓️ Staff Timetable · Readable PDF for Email</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -88,7 +119,8 @@
     🔄 <strong>Flexible OFF</strong>: Morning ↔ Afternoon, Full ↔ Off (auto‑pairing).<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes.<br>
     🎛️ <strong>Custom shift</strong> – select "🎛️ Custom..." and enter your own start/end times (24‑hour format).<br>
-    🕒 <strong>Dropdown shows actual time ranges</strong> (e.g., "10:00 – 16:00") instead of "Morning".
+    🕒 <strong>Dropdown shows actual time ranges</strong> (e.g., "10:00 – 16:00") instead of "Morning".<br>
+    📄 <strong>PDF is formatted for A4 landscape with readable font sizes</strong> – perfect for email.
   </div>
 </div>
 
@@ -385,22 +417,20 @@
           // Full Day
           const fullOpt = document.createElement('option'); fullOpt.value = "full"; fullOpt.textContent = "Full Day"; if (current === "full") fullOpt.selected = true; select.appendChild(fullOpt);
           // Custom option – show "🎛️ Custom..." or the actual custom time if already set
-          const customOpt = document.createElement('option'); customOpt.value = "__CUSTOM__"; 
           if (isCustomShift(current)) {
-            // If a custom shift is currently set, we need a way to show it but the value must be the custom string.
-            // We'll create a separate option for the current custom value and mark it selected.
             const customDisplay = getCustomDisplay(current);
             const customCurrentOpt = document.createElement('option');
             customCurrentOpt.value = current;
             customCurrentOpt.textContent = customDisplay;
             customCurrentOpt.selected = true;
             select.appendChild(customCurrentOpt);
-            // Also add the "Custom..." option to allow changing it
             const changeOpt = document.createElement('option');
             changeOpt.value = "__CUSTOM__";
             changeOpt.textContent = "🎛️ Change Custom...";
             select.appendChild(changeOpt);
           } else {
+            const customOpt = document.createElement('option');
+            customOpt.value = "__CUSTOM__";
             customOpt.textContent = "🎛️ Custom...";
             select.appendChild(customOpt);
           }
@@ -541,8 +571,9 @@
     }
   }
 
-  // ==================== PDF GENERATION ====================
+  // ==================== PDF GENERATION (A4 Landscape, scaled to fit) ====================
   async function generatePDFBlob() {
+    // Build HTML for PDF
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
     let htmlContent = `<div class="pdf-timetable"><h2>Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
@@ -561,9 +592,9 @@
           else if (shift === "full") display = "Full Day";
           else if (isCustomShift(shift)) display = getCustomDisplay(shift);
           else display = "— Off —";
-          htmlContent += `<td><span class="shift-text">${display}</span></td>`;
+          htmlContent += `<td>${display}</td>`;
         }
-        htmlContent += `</table>`;
+        htmlContent += `</tr>`;
       }
       htmlContent += `</tbody></table></div>`;
     }
@@ -573,16 +604,41 @@
     tempDiv.style.position = 'absolute';
     tempDiv.style.left = '-9999px';
     tempDiv.style.top = '-9999px';
+    tempDiv.style.width = '1100px'; // fixed width for consistent rendering
+    tempDiv.style.background = 'white';
+    tempDiv.style.padding = '20px';
     tempDiv.innerHTML = htmlContent;
     document.body.appendChild(tempDiv);
+
     try {
-      const canvas = await html2canvas(tempDiv, { scale: 2, backgroundColor: '#ffffff', logging: false, useCORS: true });
+      const canvas = await html2canvas(tempDiv, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        windowWidth: 1100
+      });
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const { jsPDF } = window.jspdf;
+      
+      // A4 landscape dimensions in mm: 297 x 210
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      const pdf = new jsPDF({ unit: 'px', format: [imgWidth, imgHeight], orientation: imgWidth > imgHeight ? 'landscape' : 'portrait' });
-      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+      const ratio = imgWidth / imgHeight;
+      let finalWidth = pageWidth - 20; // margins
+      let finalHeight = finalWidth / ratio;
+      if (finalHeight > pageHeight - 20) {
+        finalHeight = pageHeight - 20;
+        finalWidth = finalHeight * ratio;
+      }
+      const x = (pageWidth - finalWidth) / 2;
+      const y = 10;
+      
+      pdf.addImage(imgData, 'JPEG', x, y, finalWidth, finalHeight);
       return pdf.output('blob');
     } finally {
       document.body.removeChild(tempDiv);
