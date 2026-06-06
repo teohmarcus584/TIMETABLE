@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Clean PDF for Email</title>
+  <title>Weekly Timetable | One‑Page PDF (Readable)</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -40,28 +40,28 @@
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
 
-    /* PDF styles – compact, no overflow */
+    /* PDF styles – balanced, fits one A4 landscape page */
     .pdf-timetable {
       font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
       background: white;
       padding: 10px;
-      width: 1000px;  /* fixed width ensures consistent capture */
+      width: 1100px;  /* slightly wider to allow 10px text */
       margin: 0 auto;
     }
     .pdf-timetable h2 {
-      font-size: 16px;
+      font-size: 18px;
       margin: 0 0 12px;
       text-align: center;
     }
     .pdf-timetable .outlet-card {
-      border: 1px solid #ccc;
-      margin-bottom: 15px;
+      border: 1px solid #aaa;
+      margin-bottom: 12px;
     }
     .pdf-timetable .outlet-title {
       background: #f0f0f0;
       padding: 6px 10px;
       font-weight: bold;
-      font-size: 12px;
+      font-size: 13px;
     }
     .pdf-timetable .week-table {
       border-collapse: collapse;
@@ -71,11 +71,11 @@
     .pdf-timetable .week-table th,
     .pdf-timetable .week-table td {
       border: 1px solid #aaa;
-      padding: 4px 6px;
+      padding: 6px 8px;
       text-align: left;
       vertical-align: top;
-      font-size: 8px;
-      line-height: 1.2;
+      font-size: 10px;
+      line-height: 1.3;
       word-break: break-word;
     }
     .pdf-timetable .week-table th {
@@ -85,6 +85,7 @@
     .pdf-timetable .staff-name-cell {
       background: #f9f9f9;
       font-weight: 600;
+      font-size: 11px;
     }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
   </style>
@@ -94,7 +95,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Clean PDF for Email</h1>
+    <h1>🗓️ Staff Timetable · One‑Page PDF</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -122,7 +123,7 @@
     🔓 <strong>Flexible ON</strong>: no automatic changes.<br>
     🎛️ <strong>Custom shift</strong> – select "🎛️ Custom..." and enter your own start/end times (24‑hour format).<br>
     🕒 <strong>Dropdown shows actual time ranges</strong> (e.g., "10:00 – 16:00") instead of "Morning".<br>
-    📄 <strong>PDF is compact, no cut‑off, fits A4 landscape</strong> – perfect for email.
+    📄 <strong>PDF uses balanced fonts (10-11px) and fits perfectly on one A4 landscape page</strong>.
   </div>
 </div>
 
@@ -165,10 +166,10 @@
 
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const OUTLETS = [
-  { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
-  { id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
-  { id: "queens", name: "🛍️ Queens Mall", hours: "10:30 – 22:30", shiftTimes: { morning: "10:30 – 16:30", afternoon: "16:30 – 22:30", full: "10:30 – 22:30" } }
- ];
+    { id: "gurney", name: "🏬 Gurney Paragon", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
+    { id: "sunshine", name: "☀️ Sunshine Central", hours: "10:00 – 22:00", shiftTimes: { morning: "10:00 – 16:00", afternoon: "16:00 – 22:00", full: "10:00 – 22:00" } },
+    { id: "queens", name: "🛍️ Queens Mall", hours: "10:30 – 22:30", shiftTimes: { morning: "10:30 – 16:30", afternoon: "16:30 – 22:30", full: "10:30 – 22:30" } }
+  ];
   const DEFAULT_STAFF_PER_STORE = {
     gurney: ["Amy Chen", "Ben Lee", "Carla Raj"],
     sunshine: ["David Lim", "Emma Tan", "Fiona Wong"],
@@ -573,9 +574,8 @@
     }
   }
 
-  // ==================== PDF GENERATION – COMPACT, NO CUT-OFF ====================
+  // ==================== PDF GENERATION – ONE PAGE, READABLE ====================
   async function generatePDFBlob() {
-    // Build the PDF HTML (same as before but with compact styles already in CSS)
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
     let htmlContent = `<div class="pdf-timetable"><h2>Staff Timetable – Week Starting ${new Date(currentWeekStart).toLocaleDateString()}</h2>`;
@@ -606,18 +606,17 @@
     tempDiv.style.position = 'absolute';
     tempDiv.style.left = '-9999px';
     tempDiv.style.top = '-9999px';
-    tempDiv.style.width = '1000px';
+    tempDiv.style.width = '1100px';
     tempDiv.style.backgroundColor = 'white';
     tempDiv.innerHTML = htmlContent;
     document.body.appendChild(tempDiv);
     try {
-      // Render at high scale
       const canvas = await html2canvas(tempDiv, {
         scale: 2,
         backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
-        windowWidth: 1000
+        windowWidth: 1100
       });
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const { jsPDF } = window.jspdf;
@@ -629,7 +628,7 @@
       
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      // Fit to page width with some margin
+      // Fit to page with comfortable margins
       const maxWidth = pageWidth - 20;
       const maxHeight = pageHeight - 20;
       let finalWidth = maxWidth;
