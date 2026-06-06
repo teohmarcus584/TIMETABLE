@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | One‑Page PDF (Readable)</title>
+  <title>Weekly Timetable | One‑Page PDF (Clearer Fonts)</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -40,16 +40,16 @@
     .modal-buttons { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
     @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
 
-    /* PDF styles – balanced, fits one A4 landscape page */
+    /* PDF styles – bigger but still fits one A4 landscape */
     .pdf-timetable {
       font-family: system-ui, 'Segoe UI', 'Inter', sans-serif;
       background: white;
       padding: 10px;
-      width: 1100px;  /* slightly wider to allow 10px text */
+      width: 1100px;
       margin: 0 auto;
     }
     .pdf-timetable h2 {
-      font-size: 18px;
+      font-size: 20px;
       margin: 0 0 12px;
       text-align: center;
     }
@@ -59,9 +59,9 @@
     }
     .pdf-timetable .outlet-title {
       background: #f0f0f0;
-      padding: 6px 10px;
+      padding: 8px 12px;
       font-weight: bold;
-      font-size: 13px;
+      font-size: 14px;
     }
     .pdf-timetable .week-table {
       border-collapse: collapse;
@@ -74,8 +74,8 @@
       padding: 6px 8px;
       text-align: left;
       vertical-align: top;
-      font-size: 10px;
-      line-height: 1.3;
+      font-size: 11px;
+      line-height: 1.35;
       word-break: break-word;
     }
     .pdf-timetable .week-table th {
@@ -85,7 +85,7 @@
     .pdf-timetable .staff-name-cell {
       background: #f9f9f9;
       font-weight: 600;
-      font-size: 11px;
+      font-size: 12px;
     }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
   </style>
@@ -95,7 +95,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · One‑Page PDF</h1>
+    <h1>🗓️ Staff Timetable · One‑Page PDF (Clearer Fonts)</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -123,7 +123,7 @@
     🔓 <strong>Flexible ON</strong>: no automatic changes.<br>
     🎛️ <strong>Custom shift</strong> – select "🎛️ Custom..." and enter your own start/end times (24‑hour format).<br>
     🕒 <strong>Dropdown shows actual time ranges</strong> (e.g., "10:00 – 16:00") instead of "Morning".<br>
-    📄 <strong>PDF uses balanced fonts (10-11px) and fits perfectly on one A4 landscape page</strong>.
+    📄 <strong>PDF fonts are slightly larger (11‑12px) while still fitting one A4 landscape page</strong>.
   </div>
 </div>
 
@@ -574,7 +574,7 @@
     }
   }
 
-  // ==================== PDF GENERATION – ONE PAGE, READABLE ====================
+  // ==================== PDF GENERATION – One Page, Readable ====================
   async function generatePDFBlob() {
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
@@ -594,7 +594,7 @@
           else if (shift === "full") display = "Full Day";
           else if (isCustomShift(shift)) display = getCustomDisplay(shift);
           else display = "— Off —";
-          htmlContent += `<td>${display}</td>`;
+          htmlContent += `<td>${display}</tr>`;
         }
         htmlContent += `</tr>`;
       }
@@ -628,7 +628,6 @@
       
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      // Fit to page with comfortable margins
       const maxWidth = pageWidth - 20;
       const maxHeight = pageHeight - 20;
       let finalWidth = maxWidth;
