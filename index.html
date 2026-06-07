@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Weekly Timetable | Custom Shift + Store Selector</title>
+  <title>Weekly Timetable | Custom Shift with Store Name</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -56,7 +56,7 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🗓️ Staff Timetable · Custom Shift with Store Selector</h1>
+    <h1>🗓️ Staff Timetable · Custom Shift with Store Name</h1>
     <div>Select week → each column shows day + date</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
@@ -83,7 +83,7 @@
     🔄 <strong>Flexible OFF</strong>: Morning ↔ Afternoon, Full ↔ Off (auto‑pairing).<br>
     🔓 <strong>Flexible ON</strong>: no automatic changes.<br>
     🎛️ <strong>Custom shift</strong> – select "🎛️ Custom..." → choose a store to pre‑fill times, or enter any 24h range.<br>
-    📄 PDF is compact, fits A4 landscape, no cut‑off.
+    🏷️ <strong>Custom shifts show the store name</strong> (e.g., "🏬 Gurney: 10:00 – 22:00").
   </div>
 </div>
 
@@ -105,12 +105,12 @@
   <div class="modal-content">
     <h3>⏰ Custom Shift (24‑hour format)</h3>
     <div class="filter-group">
-      <label>Store (optional – to pre‑fill times)</label>
+      <label>Select Store (optional – pre‑fill hours)</label>
       <select id="customStoreSelect">
-        <option value="">-- Manual entry --</option>
-        <option value="gurney">Gurney Paragon (10:00 – 22:00)</option>
-        <option value="sunshine">Sunshine Central (10:00 – 22:00)</option>
-        <option value="queens">Queens Mall (10:30 – 22:30)</option>
+        <option value="">-- Manual entry (no store) --</option>
+        <option value="gurney">🏬 Gurney Paragon</option>
+        <option value="sunshine">☀️ Sunshine Central</option>
+        <option value="queens">🛍️ Queens Mall</option>
       </select>
     </div>
     <div class="filter-group">
@@ -193,8 +193,31 @@
   function getAssignment(weekStart, outletId, staff, dayIdx) { return assignments[getKey(weekStart, outletId, staff, dayIdx)] || ""; }
 
   function isCustomShift(value) { return value && value.startsWith("custom:"); }
-  function getCustomDisplay(value) { return value.substring(7); }
-  function createCustomValue(start, end) { return `custom:${start} – ${end}`; }
+  
+  // New format: custom:storeId|start – end
+  function getCustomDisplay(value) {
+    const withoutPrefix = value.substring(7);
+    const parts = withoutPrefix.split('|');
+    if (parts.length === 2) {
+      const storeId = parts[0];
+      const timeRange = parts[1];
+      let storeEmoji = "";
+      let storeShort = "";
+      if (storeId === "gurney") { storeEmoji = "🏬"; storeShort = "Gurney"; }
+      else if (storeId === "sunshine") { storeEmoji = "☀️"; storeShort = "Sunshine"; }
+      else if (storeId === "queens") { storeEmoji = "🛍️"; storeShort = "Queens"; }
+      else { return timeRange; }
+      return `${storeEmoji} ${storeShort}: ${timeRange}`;
+    }
+    return withoutPrefix;
+  }
+  
+  function createCustomValue(storeId, start, end) {
+    if (storeId && storeId !== "") {
+      return `custom:${storeId}|${start} – ${end}`;
+    }
+    return `custom:${start} – ${end}`;
+  }
 
   function setAssignment(weekStart, outletId, staff, dayIdx, value, skipAuto = false) {
     const key = getKey(weekStart, outletId, staff, dayIdx);
@@ -293,7 +316,6 @@
 
   let pendingCustomShift = null;
 
-  // Pre‑fill times based on selected store (optional)
   function prefillFromStore(storeId) {
     if (storeId === "gurney") {
       document.getElementById('customStartTime').value = "10:00";
@@ -309,7 +331,6 @@
 
   function showCustomShiftModal(outlet, staff, dayIdx) {
     pendingCustomShift = { outlet, staff, dayIdx };
-    // Reset store selector and time fields
     const storeSelect = document.getElementById('customStoreSelect');
     storeSelect.value = "";
     document.getElementById('customStartTime').value = "09:00";
@@ -317,20 +338,20 @@
     document.getElementById('customShiftModal').style.display = 'flex';
   }
 
-  // When store selector changes, pre‑fill times
   document.getElementById('customStoreSelect').addEventListener('change', (e) => {
     prefillFromStore(e.target.value);
   });
 
   function applyCustomShift() {
     if (!pendingCustomShift) return;
+    const storeId = document.getElementById('customStoreSelect').value;
     const start = document.getElementById('customStartTime').value;
     const end = document.getElementById('customEndTime').value;
     if (!start || !end) {
       alert("Please enter both start and end times.");
       return;
     }
-    const customValue = createCustomValue(start, end);
+    const customValue = createCustomValue(storeId, start, end);
     setAssignment(currentWeekStart, pendingCustomShift.outlet.id, pendingCustomShift.staff, pendingCustomShift.dayIdx, customValue, false);
     document.getElementById('customShiftModal').style.display = 'none';
     pendingCustomShift = null;
@@ -561,7 +582,7 @@
     }
   }
 
-  // ==================== PDF GENERATION (compact, no cut‑off) ====================
+  // ==================== PDF GENERATION ====================
   async function generatePDFBlob() {
     const weekDates = getWeekDates(new Date(currentWeekStart));
     const headerLabels = weekDates.map((d, idx) => `${DAY_NAMES[idx]}, ${formatDateShort(d)}`);
@@ -585,7 +606,7 @@
         }
         htmlContent += `</tr>`;
       }
-      htmlContent += `</tbody><tr></div>`;
+      htmlContent += `</tbody></table></div>`;
     }
     htmlContent += `</div>`;
 
