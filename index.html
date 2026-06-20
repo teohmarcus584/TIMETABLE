@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Smart Timetable | Shift Coverage & Red Alert</title>
+  <title>Smart Timetable | Fixed Coverage Validation</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -50,9 +50,9 @@
     .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
 
-    .coverage-warning { background-color: #fee2e2 !important; position: relative; box-shadow: inset 0 0 0 2px #ef4444; border-radius: 12px; }
-    .warning-indicator { font-size: 0.65rem; color: #b91c1c; font-weight: bold; margin-top: 6px; text-align: center; background: #fff0f0; border-radius: 20px; padding: 2px 6px; display: inline-block; }
-    .coverage-badge { font-size: 0.7rem; background: white; border-radius: 20px; padding: 2px 8px; margin-top: 6px; display: inline-block; border: 1px solid #e2e8f0; }
+    /* Coverage warnings – now only in summary row */
+    .coverage-summary-covered { background: #e6f7e6 !important; color: #0f7b0f; font-weight: bold; text-align: center; }
+    .coverage-summary-missing { background: #ffe0e0 !important; color: #b91c1c; font-weight: bold; text-align: center; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -60,8 +60,8 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>📋 Smart Timetable · Shift Coverage Validator</h1>
-    <div>⚠️ <strong>Red highlight</strong> appears when ANY day has incomplete coverage. <strong>Full Day</strong> automatically covers both Morning and Afternoon.</div>
+    <h1>📋 Smart Timetable · Fixed Coverage Validation</h1>
+    <div>✅ <strong>Validation checks the ENTIRE store per day</strong> – not per staff row. Red only appears when the day truly lacks coverage.</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
       <input type="date" id="weekStartPicker" value="">
@@ -83,10 +83,12 @@
 
   <div id="outletsContainer"></div>
   <div class="footer">
-    🔴 <strong>Coverage logic (corrected)</strong>: <br>
-    • If any staff has <strong>Full Day</strong> → day is fully covered (no validation needed).<br>
-    • If no Full Day → day must have <strong>at least one "Morning"</strong> AND <strong>at least one "Afternoon"</strong>.<br>
-    • Custom shifts are treated as partial coverage – they do NOT auto-satisfy either slot unless explicitly set as Morning/Afternoon/Full.
+    🔴 <strong>Coverage logic (fixed):</strong> <br>
+    • For each outlet, each day: check across ALL staff.<br>
+    • If ANY staff has <strong>Full Day</strong> → day is covered.<br>
+    • If no Full Day → day needs <strong>at least one "Morning"</strong> AND <strong>at least one "Afternoon"</strong>.<br>
+    • Red warnings appear in the <strong>summary row only</strong> – not per cell.<br>
+    • PDF export works regardless of coverage status.
   </div>
 </div>
 
@@ -132,7 +134,7 @@
 </div>
 
 <script>
-  // ==================== SCRIPT URL ====================
+  // ==================== YOUR SCRIPT URL ====================
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7X6AtxOozS2cMAr6acPDLrT4XCVjNY6eIy3OHvuCz8P4VWTc-iJNQ78P3RYmLQLnC6g/exec'; // ⚠️ REPLACE WITH YOUR URL
   // ================================================================
 
@@ -219,7 +221,7 @@
     return `custom:${start} – ${end}`;
   }
 
-  // ==================== ✅ CORRECTED COVERAGE VALIDATION ====================
+  // ==================== ✅ FIXED COVERAGE VALIDATION ====================
   function isDayCovered(weekStart, outlet, dayIdx) {
     const staffList = staffPerStore[outlet.id] || [];
     if (staffList.length === 0) return false;
@@ -236,7 +238,7 @@
     // If anyone has Full Day, coverage is complete
     if (hasFull) return true;
     
-    // Otherwise, need both Morning AND Afternoon
+    // Otherwise, need both Morning AND Afternoon (across any staff)
     return hasMorning && hasAfternoon;
   }
   // ==========================================================================
@@ -492,42 +494,27 @@
             };
           })(outlet, staff, dayIdx, select));
           cell.appendChild(select);
-          
-          // Add coverage warning indicator if day not covered
-          if (!coveragePerDay[dayIdx]) {
-            const warningSpan = document.createElement('div');
-            warningSpan.className = 'warning-indicator';
-            warningSpan.innerHTML = '⚠️ Incomplete coverage (need Morning & Afternoon)';
-            cell.appendChild(warningSpan);
-            cell.classList.add('coverage-warning');
-          } else {
-            const okSpan = document.createElement('div');
-            okSpan.className = 'coverage-badge';
-            okSpan.innerHTML = '✅ Full coverage';
-            cell.appendChild(okSpan);
-          }
           row.appendChild(cell);
         }
         tbody.appendChild(row);
       }
       
-      // Extra row to show daily coverage summary (visual)
+      // Extra row: daily coverage summary (one per day – red/green based on entire store)
       const summaryRow = document.createElement('tr');
       const summaryLabel = document.createElement('td');
       summaryLabel.className = 'staff-name-cell';
       summaryLabel.textContent = '📊 Day Status';
       summaryLabel.style.background = "#f1f5f9";
       summaryRow.appendChild(summaryLabel);
-      for (let d=0; d<7; d++) {
+      for (let d = 0; d < 7; d++) {
         const statusCell = document.createElement('td');
         statusCell.style.textAlign = 'center';
         if (coveragePerDay[d]) {
-          statusCell.innerHTML = '✅ Covered';
-          statusCell.style.background = '#e6f7e6';
+          statusCell.textContent = '✅ Covered';
+          statusCell.className = 'coverage-summary-covered';
         } else {
-          statusCell.innerHTML = '🔴 MISSING (Morning/Afternoon)';
-          statusCell.style.background = '#ffe0e0';
-          statusCell.style.fontWeight = 'bold';
+          statusCell.textContent = '🔴 MISSING';
+          statusCell.className = 'coverage-summary-missing';
         }
         summaryRow.appendChild(statusCell);
       }
