@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Smart Timetable | Fixed Coverage Validation</title>
+  <title>Smart Timetable | Custom Shift Coverage</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -50,7 +50,6 @@
     .pdf-timetable .staff-name-cell { background: #f9f9f9; font-weight: 600; }
     .status-badge { font-size: 0.8rem; background: #e8f5e9; border-radius: 40px; padding: 4px 12px; display: inline-block; }
 
-    /* Coverage warnings – now only in summary row */
     .coverage-summary-covered { background: #e6f7e6 !important; color: #0f7b0f; font-weight: bold; text-align: center; }
     .coverage-summary-missing { background: #ffe0e0 !important; color: #b91c1c; font-weight: bold; text-align: center; }
   </style>
@@ -60,8 +59,8 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>📋 Smart Timetable · Fixed Coverage Validation</h1>
-    <div>✅ <strong>Validation checks the ENTIRE store per day</strong> – not per staff row. Red only appears when the day truly lacks coverage.</div>
+    <h1>📋 Smart Timetable · Custom Shift Coverage</h1>
+    <div>✅ Custom shifts are now analysed – they count toward Morning/Afternoon coverage if they overlap at least 50% of the block.</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
       <input type="date" id="weekStartPicker" value="">
@@ -83,11 +82,10 @@
 
   <div id="outletsContainer"></div>
   <div class="footer">
-    🔴 <strong>Coverage logic (fixed):</strong> <br>
-    • For each outlet, each day: check across ALL staff.<br>
-    • If ANY staff has <strong>Full Day</strong> → day is covered.<br>
-    • If no Full Day → day needs <strong>at least one "Morning"</strong> AND <strong>at least one "Afternoon"</strong>.<br>
-    • Red warnings appear in the <strong>summary row only</strong> – not per cell.<br>
+    🔴 <strong>Coverage logic (custom shift aware):</strong> <br>
+    • Custom shifts are compared against store's Morning and Afternoon blocks.<br>
+    • If a custom shift covers ≥50% of a block, it counts toward that block.<br>
+    • Full Day automatically covers both blocks.<br>
     • PDF export works regardless of coverage status.
   </div>
 </div>
@@ -221,24 +219,60 @@
     return `custom:${start} – ${end}`;
   }
 
-  // ==================== ✅ FIXED COVERAGE VALIDATION ====================
+  // ==================== ✅ FIXED COVERAGE VALIDATION (CUSTOM SHIFT AWARE) ====================
   function isDayCovered(weekStart, outlet, dayIdx) {
     const staffList = staffPerStore[outlet.id] || [];
     if (staffList.length === 0) return false;
     
     let hasMorning = false, hasAfternoon = false, hasFull = false;
     
-    for (let staff of staffList) {
-      const shift = getAssignment(weekStart, outlet.id, staff, dayIdx);
-      if (shift === "morning") hasMorning = true;
-      if (shift === "afternoon") hasAfternoon = true;
-      if (shift === "full") hasFull = true;
+    function toMinutes(timeStr) {
+      const parts = timeStr.trim().split(':');
+      return parseInt(parts[0]) * 60 + parseInt(parts[1]);
     }
     
-    // If anyone has Full Day, coverage is complete
-    if (hasFull) return true;
+    function parseTimeRange(rangeStr) {
+      const parts = rangeStr.split('–').map(s => s.trim());
+      if (parts.length !== 2) return null;
+      return { start: toMinutes(parts[0]), end: toMinutes(parts[1]) };
+    }
     
-    // Otherwise, need both Morning AND Afternoon (across any staff)
+    const morning = parseTimeRange(outlet.shiftTimes.morning);
+    const afternoon = parseTimeRange(outlet.shiftTimes.afternoon);
+    
+    function coversBlock(customStart, customEnd, blockStart, blockEnd) {
+      const overlapStart = Math.max(customStart, blockStart);
+      const overlapEnd = Math.min(customEnd, blockEnd);
+      if (overlapStart >= overlapEnd) return false;
+      const overlapDuration = overlapEnd - overlapStart;
+      const blockDuration = blockEnd - blockStart;
+      return (overlapDuration / blockDuration) >= 0.5;
+    }
+    
+    for (let staff of staffList) {
+      const shift = getAssignment(weekStart, outlet.id, staff, dayIdx);
+      
+      if (shift === "morning") hasMorning = true;
+      else if (shift === "afternoon") hasAfternoon = true;
+      else if (shift === "full") hasFull = true;
+      else if (isCustomShift(shift)) {
+        const customPart = shift.substring(7);
+        const timePart = customPart.includes('|') ? customPart.split('|')[1] : customPart;
+        const parts = timePart.split('–').map(s => s.trim());
+        if (parts.length === 2) {
+          const customStart = toMinutes(parts[0]);
+          const customEnd = toMinutes(parts[1]);
+          if (morning && coversBlock(customStart, customEnd, morning.start, morning.end)) {
+            hasMorning = true;
+          }
+          if (afternoon && coversBlock(customStart, customEnd, afternoon.start, afternoon.end)) {
+            hasAfternoon = true;
+          }
+        }
+      }
+    }
+    
+    if (hasFull) return true;
     return hasMorning && hasAfternoon;
   }
   // ==========================================================================
@@ -499,7 +533,7 @@
         tbody.appendChild(row);
       }
       
-      // Extra row: daily coverage summary (one per day – red/green based on entire store)
+      // Summary row: one per day
       const summaryRow = document.createElement('tr');
       const summaryLabel = document.createElement('td');
       summaryLabel.className = 'staff-name-cell';
