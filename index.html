@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Smart Timetable | Custom Shift Coverage</title>
+  <title>Smart Timetable | Strict Coverage</title>
   <style>
     * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Inter', sans-serif; }
     body { background: #f1f5f9; margin: 0; padding: 20px; color: #0f172a; }
@@ -59,8 +59,8 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>📋 Smart Timetable · Custom Shift Coverage</h1>
-    <div>✅ Custom shifts are now analysed – they count toward Morning/Afternoon coverage if they overlap at least 50% of the block.</div>
+    <h1>📋 Smart Timetable · Strict Coverage Validation</h1>
+    <div>✅ <strong>Strict rule:</strong> The ENTIRE Morning block AND the ENTIRE Afternoon block must be fully covered. Any gap → red.</div>
     <div class="week-selector">
       <label>📅 Week starting Monday:</label>
       <input type="date" id="weekStartPicker" value="">
@@ -82,11 +82,12 @@
 
   <div id="outletsContainer"></div>
   <div class="footer">
-    🔴 <strong>Coverage logic (custom shift aware):</strong> <br>
-    • Custom shifts are compared against store's Morning and Afternoon blocks.<br>
-    • If a custom shift covers ≥50% of a block, it counts toward that block.<br>
+    🔴 <strong>Strict coverage logic:</strong> <br>
+    • Morning block (e.g., 10:00–16:00) must be fully covered by any combination of shifts.<br>
+    • Afternoon block (e.g., 16:00–22:00) must be fully covered.<br>
+    • Custom shifts are analysed minute‑by‑minute to check full coverage.<br>
     • Full Day automatically covers both blocks.<br>
-    • PDF export works regardless of coverage status.
+    • <strong>Any gap → red.</strong>
   </div>
 </div>
 
@@ -133,7 +134,7 @@
 
 <script>
   // ==================== YOUR SCRIPT URL ====================
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7X6AtxOozS2cMAr6acPDLrT4XCVjNY6eIy3OHvuCz8P4VWTc-iJNQ78P3RYmLQLnC6g/exec'; // ⚠️ REPLACE WITH YOUR URL
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7X6AtxOozS2cMAr6acPDLrT4XCVjNY6eIy3OHvuCz8P4VWTc-iJNQ78P3RYmLQLnC6g/exec'; // ⚠️ REPLACE
   // ================================================================
 
   const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -219,12 +220,12 @@
     return `custom:${start} – ${end}`;
   }
 
-  // ==================== ✅ FIXED COVERAGE VALIDATION (CUSTOM SHIFT AWARE) ====================
+  // ==================== STRICT COVERAGE VALIDATION ====================
   function isDayCovered(weekStart, outlet, dayIdx) {
     const staffList = staffPerStore[outlet.id] || [];
     if (staffList.length === 0) return false;
     
-    let hasMorning = false, hasAfternoon = false, hasFull = false;
+    let hasFull = false;
     
     function toMinutes(timeStr) {
       const parts = timeStr.trim().split(':');
@@ -240,40 +241,47 @@
     const morning = parseTimeRange(outlet.shiftTimes.morning);
     const afternoon = parseTimeRange(outlet.shiftTimes.afternoon);
     
-    function coversBlock(customStart, customEnd, blockStart, blockEnd) {
-      const overlapStart = Math.max(customStart, blockStart);
-      const overlapEnd = Math.min(customEnd, blockEnd);
-      if (overlapStart >= overlapEnd) return false;
-      const overlapDuration = overlapEnd - overlapStart;
-      const blockDuration = blockEnd - blockStart;
-      return (overlapDuration / blockDuration) >= 0.5;
+    // Track covered minutes for each block
+    let morningCovered = new Set();
+    let afternoonCovered = new Set();
+    
+    function addCoverage(shiftStart, shiftEnd, blockStart, blockEnd, coveredSet) {
+      const overlapStart = Math.max(shiftStart, blockStart);
+      const overlapEnd = Math.min(shiftEnd, blockEnd);
+      if (overlapStart >= overlapEnd) return;
+      for (let minute = overlapStart; minute < overlapEnd; minute++) {
+        coveredSet.add(minute);
+      }
     }
     
     for (let staff of staffList) {
       const shift = getAssignment(weekStart, outlet.id, staff, dayIdx);
       
-      if (shift === "morning") hasMorning = true;
-      else if (shift === "afternoon") hasAfternoon = true;
-      else if (shift === "full") hasFull = true;
-      else if (isCustomShift(shift)) {
+      if (shift === "morning") {
+        for (let m = morning.start; m < morning.end; m++) morningCovered.add(m);
+      } else if (shift === "afternoon") {
+        for (let m = afternoon.start; m < afternoon.end; m++) afternoonCovered.add(m);
+      } else if (shift === "full") {
+        hasFull = true;
+      } else if (isCustomShift(shift)) {
         const customPart = shift.substring(7);
         const timePart = customPart.includes('|') ? customPart.split('|')[1] : customPart;
         const parts = timePart.split('–').map(s => s.trim());
         if (parts.length === 2) {
           const customStart = toMinutes(parts[0]);
           const customEnd = toMinutes(parts[1]);
-          if (morning && coversBlock(customStart, customEnd, morning.start, morning.end)) {
-            hasMorning = true;
-          }
-          if (afternoon && coversBlock(customStart, customEnd, afternoon.start, afternoon.end)) {
-            hasAfternoon = true;
-          }
+          addCoverage(customStart, customEnd, morning.start, morning.end, morningCovered);
+          addCoverage(customStart, customEnd, afternoon.start, afternoon.end, afternoonCovered);
         }
       }
     }
     
     if (hasFull) return true;
-    return hasMorning && hasAfternoon;
+    
+    const morningDuration = morning.end - morning.start;
+    const afternoonDuration = afternoon.end - afternoon.start;
+    
+    return (morningCovered.size >= morningDuration) && (afternoonCovered.size >= afternoonDuration);
   }
   // ==========================================================================
 
@@ -547,7 +555,7 @@
           statusCell.textContent = '✅ Covered';
           statusCell.className = 'coverage-summary-covered';
         } else {
-          statusCell.textContent = '🔴 MISSING';
+          statusCell.textContent = '🔴 MISSING (gap)';
           statusCell.className = 'coverage-summary-missing';
         }
         summaryRow.appendChild(statusCell);
